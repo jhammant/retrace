@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Retrace launchd user agent.
+
+  This runs `retrace serve`, which hosts the local API + web UI on 127.0.0.1 and
+  runs the capture daemon (capture still respects the off-by-default enabled flag,
+  presence gating, denylist, etc.).
+
+  Install:
+    1) Edit the two ABSOLUTE paths below (the `uv` binary and the repo directory).
+       Find uv with:  command -v uv
+    2) cp scripts/com.retrace.daemon.plist ~/Library/LaunchAgents/com.retrace.daemon.plist
+    3) launchctl load -w ~/Library/LaunchAgents/com.retrace.daemon.plist
+
+  Stop / uninstall:
+    launchctl unload -w ~/Library/LaunchAgents/com.retrace.daemon.plist
+    rm ~/Library/LaunchAgents/com.retrace.daemon.plist
+
+  Logs: /tmp/retrace.out.log and /tmp/retrace.err.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.retrace.daemon</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/ABSOLUTE/PATH/TO/uv</string>
+        <string>run</string>
+        <string>--directory</string>
+        <string>/ABSOLUTE/PATH/TO/retrace</string>
+        <string>retrace</string>
+        <string>serve</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/retrace.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/retrace.err.log</string>
+</dict>
+</plist>

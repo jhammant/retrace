@@ -1,0 +1,65 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "retrace"
+version = "0.1.0"
+description = "A private, on-device macOS rewind: capture, search, and scrub back through your day. 100% local, no telemetry."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Retrace contributors" }]
+keywords = ["macos", "rewind", "timeline", "privacy", "on-device", "screen-capture", "mcp"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: MacOS X",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS :: MacOS X",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "mcp>=1.2",
+    "numpy>=1.26",
+    "tomli-w>=1.0",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+retrace = "retrace.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/retrace-app/retrace"
+Repository = "https://github.com/retrace-app/retrace"
+Issues = "https://github.com/retrace-app/retrace/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["retrace"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"retrace/native/swift" = "retrace/native/swift"
+"retrace/web" = "retrace/web"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.uv]
+# Pin the project interpreter to 3.13 for broad wheel availability while staying modern.
+python-preference = "managed"

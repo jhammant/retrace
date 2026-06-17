@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.python-version
+
+# uv
+uv.lock.bak
+
+# Test / cache
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Node / web build (optional Vite)
+node_modules/
+retrace/web/.vite/
+
+# Compiled Swift helper binaries are cached under ~/.retrace/bin, never in-repo.
+# But guard against stray local builds:
+*.o
+*.swiftmodule
+/retrace/native/swift/build/
+
+# Stray runtime data if the app is ever pointed at the repo dir
+/bin/
+/thumbs/
+/tmp/
+/retrace.db
+/status.json
+/config.toml
+/activity_state.json
+/plugin_*.json
+
+# OS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Scratchpads (never commit)
+scratch/
+scratchpad*

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-view="now">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="dark" />
+  <title>Retrace — your private rewind</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'&gt;&lt;circle cx='16' cy='16' r='13' fill='none' stroke='%23ff7a45' stroke-width='2.5'/&gt;&lt;path d='M16 8v8l5 3' fill='none' stroke='%23ff7a45' stroke-width='2.5' stroke-linecap='round'/&gt;&lt;/svg&gt;" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+
+  <aside class="rail">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" width="26" height="26">
+          <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="2.2"/>
+          <path d="M16 8v8l5 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="brand-word">Retrace</span>
+    </div>
+
+    <nav class="nav" aria-label="Primary">
+      <a class="nav-item" href="#/now" data-nav="now">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="9" class="ring"/></svg>
+        <span>Now</span>
+      </a>
+      <a class="nav-item" href="#/timeline" data-nav="timeline">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M5 4v16M5 7h12M5 12h9M5 17h13"/></svg>
+        <span>Timeline</span>
+      </a>
+      <a class="nav-item" href="#/search" data-nav="search">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg>
+        <span>Search</span>
+      </a>
+      <a class="nav-item" href="#/stats" data-nav="stats">
+        <svg viewBox="0 0 24 24" class="ico"><path d="M4 20h16"/><path d="M7 20v-6M12 20V8M17 20v-9"/></svg>
+        <span>Stats</span>
+      </a>
+      <a class="nav-item" href="#/settings" data-nav="settings">
+        <svg viewBox="0 0 24 24" class="ico"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+        <span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="rail-foot">
+      <button id="rec-toggle" class="rec" data-on="false" title="Toggle capture">
+        <span class="rec-dot" aria-hidden="true"></span>
+        <span class="rec-label">OFF</span>
+      </button>
+      <p class="privacy-note">On-device · no cloud · no telemetry</p>
+    </div>
+  </aside>
+
+  <main class="stage">
+    <header class="recorder" id="recorder">
+      <div class="rd" data-k="state"><span class="rd-k">STATE</span><span class="rd-v" id="rd-state">—</span></div>
+      <div class="rd" data-k="last"><span class="rd-k">LAST</span><span class="rd-v" id="rd-last">—</span></div>
+      <div class="rd" data-k="stored"><span class="rd-k">STORED·TODAY</span><span class="rd-v" id="rd-stored">0</span></div>
+      <div class="rd" data-k="skipped"><span class="rd-k">SKIPPED</span><span class="rd-v" id="rd-skipped">0</span></div>
+      <div class="rd" data-k="app"><span class="rd-k">FOCUS</span><span class="rd-v" id="rd-app">—</span></div>
+      <div class="rec-actions">
+        <button class="tick-btn hide-btn" id="hide-btn" title="Hidden mode — stop recording until you resume">🙈 Hidden mode</button>
+        <button class="tick-btn" id="tick-btn" title="Capture one frame now">＋ Capture now</button>
+      </div>
+    </header>
+
+    <section class="view" id="view"></section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="lightbox" id="lightbox" hidden><img id="lightbox-img" alt="capture thumbnail" /></div>
+
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

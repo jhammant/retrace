@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "retrace": {
+      "command": "uv",
+      "args": ["run", "--directory", "/ABSOLUTE/PATH/TO/retrace", "retrace", "mcp"],
+      "env": {}
+    }
+  }
+}
