@@ -143,6 +143,55 @@ def cmd_plugins(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_menubar(args: argparse.Namespace) -> int:
+    """Show the macOS menu bar item. Starts the server if it isn't already running."""
+    import subprocess
+    import sys
+    import time
+    import urllib.request
+
+    from .config import get_settings
+    from .native.helpers import get_helper
+
+    s = get_settings()
+    base = f"http://{s.bind_host}:{s.bind_port}"
+
+    def server_up() -> bool:
+        try:
+            urllib.request.urlopen(base + "/api/health", timeout=1)
+            return True
+        except Exception:
+            return False
+
+    if not server_up():
+        print(f"Starting Retrace server on {base} …")
+        # Detached so capture keeps running after the menu bar UI is closed.
+        subprocess.Popen(
+            [sys.executable, "-m", "retrace.cli", "serve"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        for _ in range(30):
+            if server_up():
+                break
+            time.sleep(0.5)
+        if not server_up():
+            print("Server did not come up in time; the menu bar will show 'offline'.")
+
+    try:
+        binary = get_helper("retrace-menubar", s).ensure_built()
+    except Exception as exc:
+        print(f"Could not build the menu bar app: {exc}")
+        return 1
+
+    print("Retrace is now in your menu bar (top-right). Closing it leaves capture running.")
+    try:
+        subprocess.run([str(binary), base])
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
 def cmd_purge(args: argparse.Namespace) -> int:
     from .capture.retention import purge_older_than
     from .config import get_settings
@@ -206,6 +255,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("plugins", help="List installed app plugins.")
     sp.set_defaults(func=cmd_plugins)
+
+    sp = sub.add_parser("menubar", help="Show the macOS menu bar item (starts the server if needed).")
+    sp.set_defaults(func=cmd_menubar)
 
     return p
 

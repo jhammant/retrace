@@ -44,6 +44,7 @@ These are hard invariants, enforced in code and covered by tests — not prefere
 
 | | |
 |---|---|
+| **Menu bar** | A native status-bar item (`retrace menubar`) to see live state and counters, capture now, pause, toggle Hidden mode, and open the dashboard. |
 | **Now** | The latest capture, framed like a film cell, with a one-line on-device LLM caption. |
 | **Timeline** | Reverse-chronological, infinite-scroll history. Click any moment to expand its full text + thumbnail. |
 | **Search** | One box, three modes — **text** (FTS5), **semantic** (NaturalLanguage embeddings, fully local), and **hybrid**. |
@@ -65,10 +66,14 @@ make build-helpers    # compile the native Swift helpers into ~/.retrace/bin
 uv run retrace init   # create ~/.retrace (config + database). Capture is OFF.
 uv run retrace doctor # check permissions + capabilities
 
-uv run retrace start  # enable capture
+uv run retrace start    # enable capture
 uv run retrace tick --force   # take one capture right now
-uv run retrace serve  # open http://127.0.0.1:8765
+uv run retrace serve    # open http://127.0.0.1:8765
+uv run retrace menubar  # add the menu bar icon (starts the server if needed)
 ```
+
+> On a notched Mac with a crowded menu bar, the icon can hide behind the notch —
+> a menu bar manager (Ice / Bartender) or quitting a few menu bar apps reveals it.
 
 The first capture triggers macOS permission prompts (Screen Recording,
 Accessibility). `retrace doctor` tells you exactly what's missing and how to grant it.

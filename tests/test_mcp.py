@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from retrace.db import session_scope
 from retrace.mcp import server as srv
 from retrace.models import ActivityEvent, Capture, utcnow
+
+# Use "today" (local) so the suite is date-independent.
+TODAY = datetime.now().strftime("%Y-%m-%d")
 
 
 def _seed(settings):
@@ -22,7 +25,7 @@ def _seed(settings):
         s.add(cap)
         s.add(ActivityEvent(source="active", app="Safari", url="",
                             start_at=utcnow() - timedelta(minutes=5), end_at=utcnow(),
-                            seconds=300, day="2026-06-16"))
+                            seconds=300, day=TODAY))
         s.flush()
         return cap.id
 
@@ -73,8 +76,8 @@ def test_what_was_i_doing(settings):
 
 def test_stats_groupings(settings):
     _seed(settings)
-    by_app = srv.retrace_stats("2026-06-16", "2026-06-16", group_by="app")
+    by_app = srv.retrace_stats(TODAY, TODAY, group_by="app")
     assert by_app["group_by"] == "app"
     assert any(a["app"] == "Safari" for a in by_app["apps"])
-    by_day = srv.retrace_stats("2026-06-10", "2026-06-16", group_by="day")
+    by_day = srv.retrace_stats(TODAY, TODAY, group_by="day")
     assert "days" in by_day
