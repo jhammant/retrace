@@ -78,15 +78,18 @@ def time_per_app(start: datetime, end: datetime, settings: Settings | None = Non
     kc_total = sum((v or 0) for _, v in kc)
     active_total = sum((v or 0) for _, v in act)
     if kc_total > 0:
-        # knowledgeC focus intervals include away-from-keyboard time (an app stays
-        # "in focus" while you're gone). When we have idle-aware active samples that
-        # cover less time, scale knowledgeC down to the engaged total — preserving the
-        # per-app proportions but excluding left-on-but-away periods.
+        # knowledgeC focus intervals can include away-from-keyboard time. When idle-aware
+        # active samples have *substantial* coverage of the period, scale knowledgeC down
+        # to the engaged total (excluding away time) while preserving per-app proportions.
+        # When active coverage is thin (e.g. a fresh install), knowledgeC is the baseline —
+        # otherwise a few minutes of samples would wrongly shrink days of history.
         source = "knowledgec"
         scale = 1.0
-        if 0 < active_total < kc_total:
-            scale = active_total / kc_total
-            source = "knowledgec+active"
+        if active_total > 0 and active_total < kc_total:
+            coverage = active_total / kc_total
+            if coverage >= 0.5:
+                scale = coverage
+                source = "knowledgec+active"
         items = [
             {"app": name_map.get(b, _pretty_bundle(b)), "bundle_id": b,
              "seconds": (v or 0.0) * scale}

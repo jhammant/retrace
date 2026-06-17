@@ -85,11 +85,13 @@ def read_knowledgec(cutoff: datetime | None) -> list[dict]:
         log.info("knowledgeC unavailable (%s) — Full Disk Access may be required", exc)
         return []
     try:
+        # The app-focus stream is '/app/inFocus' on older macOS and '/app/usage'
+        # on macOS 26+. Query both for cross-version compatibility.
         cur = conn.execute(
             """
             SELECT ZVALUESTRING, ZSTARTDATE, ZENDDATE
             FROM ZOBJECT
-            WHERE ZSTREAMNAME = '/app/inFocus' AND ZSTARTDATE > ?
+            WHERE ZSTREAMNAME IN ('/app/inFocus', '/app/usage') AND ZSTARTDATE > ?
             ORDER BY ZSTARTDATE
             """,
             (cutoff_mac,),
