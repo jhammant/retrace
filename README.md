@@ -1,5 +1,11 @@
 # Retrace
 
+[![tests](https://github.com/jhammant/retrace/actions/workflows/ci.yml/badge.svg)](https://github.com/jhammant/retrace/actions/workflows/ci.yml)
+&nbsp;![macOS](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
+&nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+&nbsp;![License](https://img.shields.io/badge/license-Apache--2.0-green)
+&nbsp;![on-device](https://img.shields.io/badge/100%25-on--device-ff7a45)
+
 **A private, on-device "rewind" for your Mac.** Retrace quietly captures what's on
 your screen, extracts the text and context, and lets you *search and scrub back
 through your day* — plus time/usage analytics. Everything runs **100% on your
@@ -48,10 +54,10 @@ These are hard invariants, enforced in code and covered by tests — not prefere
 | **Now** | The latest capture, framed like a film cell, with a one-line on-device LLM caption. |
 | **Timeline** | Reverse-chronological, infinite-scroll history. Click any moment to expand its full text + thumbnail. |
 | **Search** | One box, three modes — **text** (FTS5), **semantic** (NaturalLanguage embeddings, fully local), and **hybrid**. |
-| **Stats** | Time-by-app, top domains, daily/weekly totals — AFK-aware so idle time isn't counted. |
+| **Stats** | Time-by-app, top domains, daily/weekly totals, and **CPU/memory charts** — AFK-aware so idle time isn't counted. Hand-rolled offline SVG, no chart library. |
 | **Settings** | Enable/disable, retention, denylist, sensitive-content + page-capture controls, permission status. |
 | **MCP** | A read-only server so other agents/assistants can query your timeline, search, and stats. |
-| **Plugins** | Per-app collectors/enrichers. Ships with a **Claude Code** collector that ingests your CLI session history into the timeline. |
+| **Plugins** | Per-app collectors / enrichers / pollers. Ships with **Claude Code** (session history), **Spotify** (tracks you play, even in the background), and **system stats** (CPU/memory). Drop your own in `~/.retrace/plugins/`. |
 
 ---
 
@@ -146,7 +152,10 @@ browser (Safari: Develop menu; Chrome: View → Developer).
 ## App plugins
 
 Plugins extend Retrace per-app. A plugin can **enrich** a capture (when a matching
-app is frontmost) and/or **collect** an app's own data independently.
+app is frontmost), **collect** an app's own data on a schedule, and/or **poll** for
+lightweight periodic sampling (every ~capture interval). Built-ins: **Claude Code**
+(session transcripts), **Spotify** (now-playing, on-device via AppleScript), and
+**system stats** (CPU/memory).
 
 ```python
 # ~/.retrace/plugins/my_app.py
