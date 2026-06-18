@@ -57,6 +57,17 @@ def test_time_per_domain_apportions_browser_focus(settings):
     assert abs(by_domain["news.example.com"]["seconds"] - (1000 * 2 / 3)) < 1.0
 
 
+def test_system_series(settings):
+    day = "2026-06-16"
+    _add(settings, source="system", app="system",
+         detail={"cpu_percent": 12.5, "mem_percent": 41.0, "load_1m": 1.2})
+    out = stats.system_series(day, settings)
+    assert out["count"] == 1
+    assert out["series"][0]["cpu"] == 12.5
+    assert out["cpu_max"] == 12.5
+    assert out["mem_max"] == 41.0
+
+
 def test_top_and_weekly_shape(settings):
     _add(settings, source="active", app="Safari", seconds=300)
     top = stats.top("2026-06-10", "2026-06-20", settings)

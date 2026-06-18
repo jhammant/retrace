@@ -6,7 +6,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Query
 
-from ..stats.service import daily, top, weekly
+from ..stats.service import daily, system_series, top, weekly
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -14,6 +14,11 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 @router.get("/daily")
 def stats_daily(day: str | None = Query(None, alias="date")) -> dict:
     return daily(day or date.today().isoformat())
+
+
+@router.get("/system")
+def stats_system(day: str | None = Query(None, alias="date")) -> dict:
+    return system_series(day or date.today().isoformat())
 
 
 @router.get("/weekly")

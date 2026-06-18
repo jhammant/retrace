@@ -354,16 +354,72 @@ async function renderStats() {
   view.innerHTML = `<header class="view-head"><div class="eyebrow">Insight</div>
     <h1 class="view-title">Your time</h1></header><div id="stats-body"><div class="spinner"></div></div>`;
   const body = $("#stats-body");
-  const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 7);
-  const params = new URLSearchParams({ start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) });
+  const end = new Date(); const start = new Date(); start.setDate(start.getDate() - 6);
+  const today = end.toISOString().slice(0, 10);
+  const params = new URLSearchParams({ start: start.toISOString().slice(0, 10), end: today });
   try {
-    const top = await api(`/stats/top?${params}`);
-    body.innerHTML = renderStatsBody(top);
+    const [top, weekly, system] = await Promise.all([
+      api(`/stats/top?${params}`),
+      api(`/stats/weekly`).catch(() => null),
+      api(`/stats/system?date=${today}`).catch(() => null),
+    ]);
+    body.innerHTML = renderStatsBody(top, weekly, system);
     requestAnimationFrame(() => $$(".bar-fill", body).forEach((b) => (b.style.width = b.dataset.w)));
   } catch (e) {
     if (e.status === 404) body.innerHTML = `<div class="empty-state"><div class="big">Stats activate soon</div>Time analytics will appear here once activity ingest is built.</div>`;
     else body.innerHTML = `<div class="empty-state">Could not load stats.</div>`;
   }
+}
+
+// ---- hand-rolled offline SVG charts ----
+function chartDefs() {
+  return `<defs>
+    <linearGradient id="emberGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb27a"/><stop offset="1" stop-color="#ff7a45"/></linearGradient>
+    <linearGradient id="emberArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(255,122,69,0.42)"/><stop offset="1" stop-color="rgba(255,122,69,0)"/></linearGradient>
+    <linearGradient id="cyanArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(88,202,187,0.4)"/><stop offset="1" stop-color="rgba(88,202,187,0)"/></linearGradient>
+  </defs>`;
+}
+
+function svgWeeklyBars(days) {
+  if (!days || !days.length) return '<div class="empty-state">No weekly data yet.</div>';
+  const W = 720, H = 190, padX = 22, padB = 34, padT = 20;
+  const max = Math.max(1, ...days.map((d) => d.seconds));
+  const bw = (W - padX * 2) / days.length;
+  const bars = days.map((d, i) => {
+    const h = (d.seconds / max) * (H - padB - padT);
+    const w = bw * 0.6, x = padX + i * bw + (bw - w) / 2, y = H - padB - h;
+    const lbl = new Date(d.day + "T00:00").toLocaleDateString([], { weekday: "short" });
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="5" fill="url(#emberGrad)"/>
+      <text x="${(x + w / 2).toFixed(1)}" y="${H - padB + 17}" class="cax" text-anchor="middle">${lbl}</text>
+      ${d.seconds > 0 ? `<text x="${(x + w / 2).toFixed(1)}" y="${(y - 6).toFixed(1)}" class="cval" text-anchor="middle">${fmtDur(d.seconds)}</text>` : ""}`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${chartDefs()}${bars}</svg>`;
+}
+
+function svgLoadChart(series) {
+  const pts = (series || []).filter((p) => p.cpu != null || p.mem != null);
+  if (pts.length < 2) return '<div class="empty-state">Not enough system samples yet — they accumulate every ~45s while capture is on.</div>';
+  const W = 720, H = 210, padL = 30, padR = 12, padT = 14, padB = 26;
+  const t0 = new Date(pts[0].at).getTime(), t1 = new Date(pts[pts.length - 1].at).getTime();
+  const span = Math.max(1, t1 - t0);
+  const X = (p) => padL + ((new Date(p.at).getTime() - t0) / span) * (W - padL - padR);
+  const Y = (v) => H - padB - ((v || 0) / 100) * (H - padT - padB);
+  const line = (k) => pts.map((p, i) => `${i ? "L" : "M"}${X(p).toFixed(1)},${Y(p[k]).toFixed(1)}`).join(" ");
+  const area = (k) => `M${X(pts[0]).toFixed(1)},${H - padB} ${pts.map((p) => `L${X(p).toFixed(1)},${Y(p[k]).toFixed(1)}`).join(" ")} L${X(pts[pts.length - 1]).toFixed(1)},${H - padB} Z`;
+  let grid = "";
+  [0, 25, 50, 75, 100].forEach((v) => {
+    const y = Y(v);
+    grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" class="grid"/><text x="${padL - 6}" y="${(y + 3).toFixed(1)}" class="cax" text-anchor="end">${v}</text>`;
+  });
+  const tl = (t) => new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return `<svg viewBox="0 0 ${W} ${H}" class="chart">${chartDefs()}${grid}
+    <path d="${area("mem")}" fill="url(#cyanArea)"/>
+    <path d="${area("cpu")}" fill="url(#emberArea)"/>
+    <path d="${line("mem")}" fill="none" stroke="var(--cyan)" stroke-width="1.6"/>
+    <path d="${line("cpu")}" fill="none" stroke="var(--ember)" stroke-width="1.8"/>
+    <text x="${padL}" y="${H - 7}" class="cax">${tl(t0)}</text>
+    <text x="${W - padR}" y="${H - 7}" class="cax" text-anchor="end">${tl(t1)}</text></svg>
+    <div class="legend"><span class="lg"><i style="background:var(--ember)"></i>CPU %</span><span class="lg"><i style="background:var(--cyan)"></i>Memory %</span></div>`;
 }
 
 function barRows(items, key, valFn, { cyan = false, weightFn = (i) => i.seconds } = {}) {
@@ -376,18 +432,23 @@ function barRows(items, key, valFn, { cyan = false, weightFn = (i) => i.seconds 
     </div>`).join("");
 }
 
-function renderStatsBody(top) {
+function renderStatsBody(top, weekly, system) {
   const apps = top.apps || [], domains = top.domains || [];
   const total = top.total_seconds || 0;
   const totalVisits = domains.reduce((a, d) => a + (d.visits || 0), 0);
   const domainLabel = (d) => d.seconds > 0 ? `${d.visits}× · ${fmtDur(d.seconds)}` : `${d.visits}×`;
+  const sysChip = system
+    ? `<span class="chip">CPU ${Math.round(system.cpu_max || 0)}% peak · Mem ${Math.round(system.mem_max || 0)}% peak</span>`
+    : "";
   return `
     <div class="cards-row">
       <div class="stat-card"><div class="stat-k">Tracked · 7 days</div><div class="stat-v">${fmtDur(total)}</div></div>
       <div class="stat-card"><div class="stat-k">Apps</div><div class="stat-v">${apps.length}</div></div>
       <div class="stat-card"><div class="stat-k">Page visits</div><div class="stat-v">${totalVisits}</div></div>
     </div>
+    ${weekly ? `<div class="panel"><h3>Activity this week</h3>${svgWeeklyBars(weekly.days)}</div>` : ""}
     <div class="panel"><h3>Time by app</h3>${apps.length ? barRows(apps, "app", (i) => fmtDur(i.seconds)) : '<div class="empty-state">No app activity yet — enable capture, or grant Full Disk Access for focus history.</div>'}</div>
+    <div class="panel"><h3>System load today ${sysChip}</h3>${system ? svgLoadChart(system.series) : '<div class="empty-state">System sampling starts once capture is on.</div>'}</div>
     <div class="panel"><h3>Top domains</h3>${domains.length ? barRows(domains, "domain", domainLabel, { cyan: true, weightFn: (i) => i.visits }) : '<div class="empty-state">No browsing activity yet.</div>'}</div>`;
 }
 

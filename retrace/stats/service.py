@@ -179,6 +179,33 @@ def daily(date_str: str, settings: Settings | None = None) -> dict:
     }
 
 
+def system_series(date_str: str, settings: Settings | None = None) -> dict:
+    """Return the CPU/memory time series (source='system') for a local day."""
+    s = settings or get_settings()
+    start, end = _day_bounds(date_str)
+    with session_scope(s) as session:
+        rows = session.execute(
+            select(ActivityEvent.start_at, ActivityEvent.detail)
+            .where(ActivityEvent.source == "system",
+                   ActivityEvent.start_at >= start, ActivityEvent.start_at < end)
+            .order_by(ActivityEvent.start_at)
+        ).all()
+    series = []
+    for at, detail in rows:
+        d = detail or {}
+        series.append({
+            "at": at.replace(tzinfo=timezone.utc).isoformat(),
+            "cpu": d.get("cpu_percent"),
+            "mem": d.get("mem_percent"),
+            "load": d.get("load_1m"),
+        })
+    peaks = {
+        "cpu_max": max((p["cpu"] for p in series if p["cpu"] is not None), default=0),
+        "mem_max": max((p["mem"] for p in series if p["mem"] is not None), default=0),
+    }
+    return {"date": date_str, "count": len(series), "series": series, **peaks}
+
+
 def weekly(week: str | None = None, settings: Settings | None = None) -> dict:
     s = settings or get_settings()
     anchor = datetime.fromisoformat(week).date() if week else datetime.now().date()
