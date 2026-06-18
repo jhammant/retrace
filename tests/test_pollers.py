@@ -27,6 +27,20 @@ def test_spotify_logs_only_track_changes(settings, monkeypatch):
         assert s.query(Capture).filter(Capture.bundle_id == "com.spotify.client").count() == 2
 
 
+def test_apple_music_logs_track(settings, monkeypatch):
+    from retrace.plugins.builtin import apple_music as am
+
+    track = {"id": "ABC123", "name": "Clair de Lune", "artist": "Debussy", "album": "Suite"}
+    monkeypatch.setattr(am, "_now_playing", lambda: track)
+    p = am.AppleMusicPlugin()
+    p.poll(settings)
+    p.poll(settings)
+    with session_scope(settings) as s:
+        rows = s.query(Capture).filter(Capture.bundle_id == "com.apple.Music").all()
+        assert len(rows) == 1
+        assert rows[0].caption == "🎵 Clair de Lune — Debussy"
+
+
 def test_spotify_noop_when_not_playing(settings, monkeypatch):
     from retrace.plugins.builtin import spotify as sp
 

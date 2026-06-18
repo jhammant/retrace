@@ -98,6 +98,32 @@ def test_web_index_served(settings):
         assert "Retrace" in r.text
 
 
+def test_export_captures_and_activity(settings):
+    from datetime import timedelta
+    from retrace.models import ActivityEvent
+
+    cap_id = _seed_capture(settings, with_thumb=False)
+    with session_scope(settings) as s:
+        s.add(ActivityEvent(source="active", app="Safari", url="",
+                            start_at=utcnow() - timedelta(minutes=1), seconds=60,
+                            day="2026-06-16"))
+    with TestClient(app) as c:
+        rj = c.get("/export/captures?format=json")
+        assert rj.status_code == 200
+        assert "attachment" in rj.headers["content-disposition"]
+        body = rj.json()
+        assert any(r["id"] == cap_id and "text" in r for r in body)
+
+        rc = c.get("/export/captures?format=csv")
+        assert rc.status_code == 200
+        assert "text/csv" in rc.headers["content-type"]
+        assert "captured_at" in rc.text  # header row
+
+        ra = c.get("/export/activity?format=json")
+        assert ra.status_code == 200
+        assert any(r["source"] == "active" for r in ra.json())
+
+
 def test_pause_resume_hidden_mode(settings):
     with TestClient(app) as c:
         c.post("/capture/pause")

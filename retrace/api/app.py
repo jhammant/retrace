@@ -31,6 +31,7 @@ _OPTIONAL_ROUTERS = (
     "retrace.api.routes_stats",
     "retrace.api.routes_search",
     "retrace.api.routes_plugins",
+    "retrace.api.routes_export",
 )
 
 

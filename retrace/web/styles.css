@@ -194,6 +194,13 @@ body {
   font-size: 11px; letter-spacing: 0.4px; color: var(--ink-dim);
 }
 .chip .av { width: 16px; height: 16px; border-radius: 5px; display: grid; place-items: center; font-size: 9px; color: #0b0a09; font-weight: 700; }
+.now-live { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 4px; }
+.live-pill { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--bg-2); border: 1px solid var(--line); font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim); }
+.live-pill.music { border-color: var(--ember-line); color: var(--ember-2); background: var(--ember-soft); max-width: 360px; }
+.live-pill.music b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-pill .gauge { width: 46px; height: 6px; background: var(--bg-3); border-radius: 99px; overflow: hidden; }
+.live-pill .gauge i { display: block; height: 100%; border-radius: 99px; }
+
 .src-tag { color: var(--cyan); }
 .src-tag.ocr { color: var(--ember-2); }
 .src-tag.mixed { color: var(--warn); }

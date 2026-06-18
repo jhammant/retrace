@@ -243,12 +243,41 @@ async function renderNow() {
         <span class="chip"><span class="src-tag ${srcClass}">${esc(full.text_source)}</span></span>
         <span class="chip">${clock(full.captured_at)} · ${relTime(full.captured_at)}</span>
       </div>
+      <div class="now-live" id="now-live"></div>
       <div class="now-meta">
         ${full.window_title ? `<div class="meta-row"><span class="mk">Window</span><span class="mv">${esc(full.window_title)}</span></div>` : ""}
         ${urlRow}${evRow}
         <div class="meta-row"><span class="mk">Text</span><span class="mv">${full.text_len} characters extracted</span></div>
       </div>
     </div></div>`;
+
+  // Live extras: currently-playing track + system load (fire-and-forget).
+  renderNowLive();
+}
+
+async function renderNowLive() {
+  const host = $("#now-live");
+  if (!host) return;
+  let recent, sys;
+  try {
+    [recent, sys] = await Promise.all([
+      api("/capture/recent?limit=40"),
+      api("/stats/system").catch(() => null),
+    ]);
+  } catch { return; }
+
+  const fresh = (c) => Date.now() - new Date(c.captured_at).getTime() < 15 * 60 * 1000;
+  const track = (recent.captures || []).find(
+    (c) => (c.bundle_id === "com.spotify.client" || c.bundle_id === "com.apple.Music") && fresh(c));
+  const last = sys && sys.series && sys.series.length ? sys.series[sys.series.length - 1] : null;
+
+  let html = "";
+  if (track) html += `<div class="live-pill music">🎵 <b>${esc((track.caption || "").replace(/^🎵\s*/, ""))}</b></div>`;
+  if (last && (last.cpu != null || last.mem != null)) {
+    html += `<div class="live-pill"><span class="gauge"><i style="width:${Math.min(100, last.cpu || 0)}%;background:var(--ember)"></i></span>CPU ${Math.round(last.cpu || 0)}%</div>`;
+    html += `<div class="live-pill"><span class="gauge"><i style="width:${Math.min(100, last.mem || 0)}%;background:var(--cyan)"></i></span>Mem ${Math.round(last.mem || 0)}%</div>`;
+  }
+  host.innerHTML = html;
 }
 
 // ---------- TIMELINE ----------
@@ -562,6 +591,12 @@ async function renderSettings() {
           <button class="btn" id="m-scan">Scan activity</button>
           <button class="btn" id="m-collect">Collect app history</button>
           <button class="btn ghost" id="m-purge">Purge old data now</button>
+        </div>
+        <div class="desc" style="margin-top:16px">Export your data</div>
+        <div class="btn-row" style="margin-top:8px">
+          <a class="btn" href="/export/captures?format=json" download>Captures · JSON</a>
+          <a class="btn" href="/export/captures?format=csv" download>Captures · CSV</a>
+          <a class="btn" href="/export/activity?format=csv" download>Activity · CSV</a>
         </div>
       </div>
     </div>`;

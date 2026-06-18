@@ -61,6 +61,22 @@ These are hard invariants, enforced in code and covered by tests — not prefere
 
 ---
 
+## Screenshots
+
+**Now** — the latest capture with an on-device caption, the now-playing track, and live CPU/memory:
+
+![Now](docs/screenshots/now.png)
+
+**Stats** — time-by-app, weekly activity, and a CPU/memory chart (hand-rolled offline SVG):
+
+![Stats](docs/screenshots/stats.png)
+
+**Timeline** — every captured moment, searchable, with expandable full text:
+
+![Timeline](docs/screenshots/timeline.png)
+
+---
+
 ## Quickstart
 
 Requires macOS 14+ (built/tested on macOS 26), the Xcode command-line tools
