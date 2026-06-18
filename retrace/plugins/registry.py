@@ -14,8 +14,10 @@ log = logging.getLogger("retrace.plugins")
 
 def _builtin() -> list[RetracePlugin]:
     from .builtin.claude_code import ClaudeCodePlugin
+    from .builtin.spotify import SpotifyPlugin
+    from .builtin.system_stats import SystemStatsPlugin
 
-    return [ClaudeCodePlugin()]
+    return [ClaudeCodePlugin(), SpotifyPlugin(), SystemStatsPlugin()]
 
 
 def _user(settings: Settings) -> list[RetracePlugin]:

@@ -32,5 +32,15 @@ class RetracePlugin:
         """Independently ingest this app's data. Return a summary dict."""
         return {"name": self.name, "ingested": 0}
 
+    def poll(self, settings: Settings) -> None:
+        """Called by the daemon on every fallback tick (~once per capture interval).
+
+        Use for lightweight periodic sampling — e.g. the currently-playing track or
+        system CPU/memory. The plugin instance is reused across ticks, so it can keep
+        state (like the last-seen track). Only runs while capture is enabled and not
+        in Hidden mode.
+        """
+        return None
+
     def __repr__(self) -> str:  # pragma: no cover
         return f"<RetracePlugin {self.name}>"

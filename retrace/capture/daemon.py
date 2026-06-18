@@ -17,6 +17,7 @@ import json
 import logging
 import subprocess
 import threading
+import time
 from datetime import datetime
 
 from ..config import Settings, get_settings
@@ -70,6 +71,9 @@ class CaptureDaemon:
         self._threads: list[threading.Thread] = []
         self._last_purge_day: str | None = None
         self._last_app: str | None = None
+        self._last_activity_scan: float = 0.0
+        self._activity_scan_interval_s: float = 600.0  # refresh knowledgeC/browser data ~every 10 min
+        self._pollers: list = []  # plugins with a poll() hook (e.g. Spotify), loaded at start
 
     # --- lifecycle ---------------------------------------------------------
     def start(self) -> None:
@@ -78,6 +82,7 @@ class CaptureDaemon:
         self._started = True
         self._stop.clear()
         self._threads = []
+        self._load_pollers()
         if self._enable_watcher:
             self._threads.append(threading.Thread(target=self._watch_loop, name="retrace-watch", daemon=True))
             self._threads.append(threading.Thread(target=self._dispatch_loop, name="retrace-dispatch", daemon=True))
@@ -98,6 +103,23 @@ class CaptureDaemon:
         self._threads = []
         self._started = False
         log.info("daemon stopped")
+
+    def _load_pollers(self) -> None:
+        """Load plugins that override poll(), once, so they keep state across ticks."""
+        try:
+            from ..plugins.base import RetracePlugin
+            from ..plugins.registry import load_plugins
+
+            self._pollers = [
+                p for p in load_plugins(self._s)
+                if type(p).poll is not RetracePlugin.poll
+            ]
+            if self._pollers:
+                log.info("loaded %d polling plugin(s): %s", len(self._pollers),
+                         ", ".join(p.name for p in self._pollers))
+        except Exception:
+            log.debug("could not load polling plugins", exc_info=True)
+            self._pollers = []
 
     def _kill_watch(self) -> None:
         proc = self._watch_proc
@@ -187,8 +209,10 @@ class CaptureDaemon:
                 self._maybe_daily_jobs()
             except Exception:
                 log.exception("daily jobs failed")
+            self._maybe_activity_scan()
             self._trigger("tick")
             self._record_active(interval)
+            self._poll_plugins()
 
     def _effective_interval(self) -> float:
         base = self._s.capture_interval_s
@@ -209,9 +233,41 @@ class CaptureDaemon:
         except ModuleNotFoundError:
             return
         try:
-            record_active_sample(interval, settings=self._s)
+            record_active_sample(interval, app=self._last_app, settings=self._s)
         except Exception:
             log.debug("active sample failed", exc_info=True)
+
+    def _maybe_activity_scan(self) -> None:
+        """Incrementally refresh knowledgeC / Safari / Chrome activity (~every 10 min)."""
+        now = time.monotonic()
+        if now - self._last_activity_scan < self._activity_scan_interval_s:
+            return
+        self._last_activity_scan = now
+        try:
+            from ..activity.service import scan_and_upsert
+
+            scan_and_upsert(full=False, settings=self._s)
+        except Exception:
+            log.debug("activity scan failed", exc_info=True)
+
+    def _poll_plugins(self) -> None:
+        """Call plugins' poll() hook each tick (e.g. Spotify, system stats).
+
+        Gated on capture being enabled and not in Hidden mode, so it follows the
+        same on/off as everything else.
+        """
+        if not self._pollers:
+            return
+        from ..status import StatusLedger
+
+        led = StatusLedger(self._s)
+        if not led.is_enabled() or led.is_snoozed():
+            return
+        for plugin in self._pollers:
+            try:
+                plugin.poll(self._s)
+            except Exception:
+                log.debug("plugin %s poll failed", getattr(plugin, "name", "?"), exc_info=True)
 
     def _maybe_daily_jobs(self) -> None:
         today = datetime.now().strftime("%Y-%m-%d")
