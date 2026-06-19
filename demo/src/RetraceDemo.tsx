@@ -358,26 +358,65 @@ const PageMemory: React.FC = () => {
   );
 };
 
-// --- Scene: what to automate next ---
-const AutomateNext: React.FC = () => {
+// --- Scene: ask Claude to automate where the time went ---
+const AutomateDemo: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const a = rise(frame, fps, 4);
   const b = rise(frame, fps, 12);
-  const c = rise(frame, fps, 26);
+  const lines: { t: string; kind?: "prompt" | "dot" | "dim"; d: number }[] = [
+    { t: "❯ where's my time actually going? automate the most repetitive bit.", kind: "prompt", d: 22 },
+    { t: "", d: 30 },
+    { t: "⏺ Reading your Retrace timeline…", kind: "dot", d: 34 },
+    { t: "  Called retrace — retrace_stats · retrace_list_apps", kind: "dim", d: 42 },
+    { t: "", d: 48 },
+    { t: "⏺ Biggest sink: ~6h this week copying Linear issues into", kind: "dot", d: 56 },
+    { t: "  Slack stand-ups — 28 times, almost identical each day.", d: 62 },
+    { t: "  That's mechanical. Automating it now.", d: 68 },
+    { t: "  ✎ wrote scripts/linear_to_slack.py · scheduled daily 9am", kind: "dim", d: 80 },
+    { t: "", d: 86 },
+    { t: "⏺ Done — that's ~5h/week back. Want your stand-up notes next?", kind: "dot", d: 92 },
+  ];
   return (
-    <AbsoluteFill style={{ background: BG, justifyContent: "center", alignItems: "center" }}>
+    <AbsoluteFill style={{ background: BG }}>
       <Vignette />
-      <div style={{ fontFamily: MONO, fontSize: 18, letterSpacing: 3, color: EMBER, opacity: a.opacity, transform: `translateY(${a.y}px)` }}>
-        FOR THE AGENT ERA
+      <div style={{ position: "absolute", top: 64, left: 130, right: 130 }}>
+        <div style={{ fontFamily: MONO, fontSize: 18, letterSpacing: 3, color: EMBER, opacity: a.opacity, transform: `translateY(${a.y}px)` }}>
+          FROM INSIGHT TO ACTION
+        </div>
+        <div style={{ fontFamily: SERIF, fontSize: 50, color: INK, marginTop: 8, opacity: b.opacity, transform: `translateY(${b.y}px)` }}>
+          Then ask your agent to automate it
+        </div>
       </div>
-      <div style={{ fontFamily: SERIF, fontSize: 62, color: INK, marginTop: 14, textAlign: "center", opacity: b.opacity, transform: `translateY(${b.y}px)` }}>
-        Spot what you do on repeat
-      </div>
-      <div style={{ fontFamily: SERIF, fontSize: 38, color: INK_DIM, marginTop: 22, textAlign: "center", maxWidth: 1200, opacity: c.opacity, transform: `translateY(${c.y}px)` }}>
-        Retrace shows your <span style={{ color: INK }}>real</span> workflows — so you know exactly{" "}
-        <span style={{ color: EMBER2 }}>what to automate next</span>, and hand it to your agent.
-      </div>
+      <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", top: 96 }}>
+        <div style={{ width: 1280, background: "#141210", border: `1px solid ${LINE}`, borderRadius: 14, overflow: "hidden", boxShadow: "0 50px 120px -30px rgba(0,0,0,0.85)" }}>
+          <div style={{ height: 46, background: "#1c1916", borderBottom: `1px solid ${LINE}`, display: "flex", alignItems: "center", paddingLeft: 18, gap: 9 }}>
+            {["#ff6f6f", "#ffd166", "#74e0a3"].map((c) => (
+              <div key={c} style={{ width: 13, height: 13, borderRadius: "50%", background: c }} />
+            ))}
+            <div style={{ fontFamily: MONO, fontSize: 17, color: INK_FAINT, marginLeft: 14 }}>claude</div>
+          </div>
+          <div style={{ padding: "30px 42px", fontFamily: MONO, fontSize: 23, lineHeight: 1.7, minHeight: 380 }}>
+            {lines.map((ln, i) => {
+              const r = rise(frame, fps, ln.d);
+              const color = ln.kind === "prompt" ? EMBER2 : ln.kind === "dim" ? INK_FAINT : INK;
+              const marker = ln.t[0];
+              return (
+                <div key={i} style={{ opacity: r.opacity, transform: `translateY(${r.y / 3}px)`, color, minHeight: 34 }}>
+                  {marker === "⏺" || marker === "❯" ? (
+                    <span>
+                      <span style={{ color: EMBER }}>{marker}</span>
+                      {ln.t.slice(1)}
+                    </span>
+                  ) : (
+                    ln.t
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </AbsoluteFill>
     </AbsoluteFill>
   );
 };
@@ -390,9 +429,9 @@ const scenes: { d: number; el: React.ReactNode }[] = [
   { d: 140, el: <Shot src="timeline.png" kicker="REWIND" title="Scrub back through your day" /> },
   { d: 195, el: <PageMemory /> },
   { d: 165, el: <Shot src="stats.png" kicker="INSIGHT" title="Your time + system load" /> },
-  { d: 215, el: <ClaudeMCP /> },
-  { d: 165, el: <AutomateNext /> },
-  { d: 145, el: <Features /> },
+  { d: 205, el: <ClaudeMCP /> },
+  { d: 235, el: <AutomateDemo /> },
+  { d: 140, el: <Features /> },
   { d: 145, el: <Privacy /> },
   { d: 145, el: <Outro /> },
 ];
