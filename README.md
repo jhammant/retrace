@@ -75,6 +75,12 @@ These are hard invariants, enforced in code and covered by tests — not prefere
 
 ![Timeline](docs/screenshots/timeline.png)
 
+**Search** — one box, three modes (text · semantic · hybrid), with highlighted matches:
+
+![Search](docs/screenshots/search.png)
+
+> Screenshots use demo data. A short demo video lives in [`demo/`](demo) (Remotion).
+
 ---
 
 ## Quickstart

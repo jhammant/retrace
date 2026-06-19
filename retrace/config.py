@@ -108,7 +108,7 @@ class Settings(BaseSettings):
     disabled_plugins: list[str] = Field(default_factory=list)  # plugin names to skip
     git_repo_roots: list[str] = Field(default_factory=lambda: ["~/dev", "~/Developer", "~/Projects", "~/code"])
     recent_files_days: int = 7
-    log_clipboard: bool = True  # clipboard history can contain sensitive text
+    log_clipboard: bool = False  # opt-in: clipboard history can contain sensitive text (passwords)
 
     # --- daemon -------------------------------------------------------------
     model_idle_unload_s: float = 600.0   # unload heavy models after this idle period
