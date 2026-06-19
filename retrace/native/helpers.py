@@ -35,6 +35,7 @@ KNOWN_HELPERS: tuple[str, ...] = (
     "retrace-caption",
     "retrace-sensitivity",
     "retrace-menubar",
+    "retrace-calendar",
 )
 # Note: activity ingest (knowledgeC / Safari / Chrome) reads SQLite directly from
 # Python, so it needs no Swift helper.

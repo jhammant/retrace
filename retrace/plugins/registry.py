@@ -14,11 +14,22 @@ log = logging.getLogger("retrace.plugins")
 
 def _builtin() -> list[RetracePlugin]:
     from .builtin.apple_music import AppleMusicPlugin
+    from .builtin.calendar import CalendarPlugin
     from .builtin.claude_code import ClaudeCodePlugin
+    from .builtin.clipboard import ClipboardPlugin
+    from .builtin.downloads import DownloadsPlugin
+    from .builtin.git_activity import GitActivityPlugin
+    from .builtin.mail import MailPlugin
+    from .builtin.notifications import NotificationsPlugin
+    from .builtin.recent_files import RecentFilesPlugin
     from .builtin.spotify import SpotifyPlugin
     from .builtin.system_stats import SystemStatsPlugin
 
-    return [ClaudeCodePlugin(), SpotifyPlugin(), AppleMusicPlugin(), SystemStatsPlugin()]
+    return [
+        ClaudeCodePlugin(), SpotifyPlugin(), AppleMusicPlugin(), SystemStatsPlugin(),
+        CalendarPlugin(), NotificationsPlugin(), GitActivityPlugin(), ClipboardPlugin(),
+        MailPlugin(), DownloadsPlugin(), RecentFilesPlugin(),
+    ]
 
 
 def _user(settings: Settings) -> list[RetracePlugin]:

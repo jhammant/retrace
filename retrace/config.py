@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     # --- plugins ------------------------------------------------------------
     enable_plugins: bool = True
     disabled_plugins: list[str] = Field(default_factory=list)  # plugin names to skip
+    git_repo_roots: list[str] = Field(default_factory=lambda: ["~/dev", "~/Developer", "~/Projects", "~/code"])
+    recent_files_days: int = 7
+    log_clipboard: bool = True  # clipboard history can contain sensitive text
 
     # --- daemon -------------------------------------------------------------
     model_idle_unload_s: float = 600.0   # unload heavy models after this idle period
@@ -188,6 +191,9 @@ EDITABLE_KEYS: tuple[str, ...] = (
     "capture_page_html",
     "enable_plugins",
     "disabled_plugins",
+    "git_repo_roots",
+    "recent_files_days",
+    "log_clipboard",
 )
 
 

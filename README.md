@@ -57,7 +57,7 @@ These are hard invariants, enforced in code and covered by tests — not prefere
 | **Stats** | Time-by-app, top domains, daily/weekly totals, and **CPU/memory charts** — AFK-aware so idle time isn't counted. Hand-rolled offline SVG, no chart library. |
 | **Settings** | Enable/disable, retention, denylist, sensitive-content + page-capture controls, permission status. |
 | **MCP** | A read-only server so other agents/assistants can query your timeline, search, and stats. |
-| **Plugins** | Per-app collectors / enrichers / pollers. Ships with **Claude Code** (session history), **Spotify** (tracks you play, even in the background), and **system stats** (CPU/memory). Drop your own in `~/.retrace/plugins/`. |
+| **Plugins** | Per-app collectors / enrichers / pollers. Ships with Claude Code, Spotify, Apple Music, system stats, calendar, notifications, git commits, Apple Mail, browser downloads, recent files, clipboard, and shell history. Drop your own in `~/.retrace/plugins/`. |
 
 ---
 
@@ -169,9 +169,10 @@ browser (Safari: Develop menu; Chrome: View → Developer).
 
 Plugins extend Retrace per-app. A plugin can **enrich** a capture (when a matching
 app is frontmost), **collect** an app's own data on a schedule, and/or **poll** for
-lightweight periodic sampling (every ~capture interval). Built-ins: **Claude Code**
-(session transcripts), **Spotify** (now-playing, on-device via AppleScript), and
-**system stats** (CPU/memory).
+lightweight periodic sampling (every ~capture interval). Built-ins cover Claude Code
+transcripts, Spotify + Apple Music now-playing, system CPU/memory, calendar (EventKit),
+macOS notifications, git commits across your repos, Apple Mail subjects, browser
+downloads, recently-opened files, clipboard, and shell history — all on-device.
 
 ```python
 # ~/.retrace/plugins/my_app.py
