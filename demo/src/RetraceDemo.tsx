@@ -294,17 +294,106 @@ const Outro: React.FC = () => {
   );
 };
 
+// --- Scene: total web-page recall ---
+const mark = (text: string, term: string) => {
+  const parts = text.split(new RegExp(`(${term})`, "i"));
+  return parts.map((p, i) =>
+    p.toLowerCase() === term.toLowerCase() ? (
+      <span key={i} style={{ background: "rgba(255,122,69,0.18)", color: EMBER2, borderRadius: 3, padding: "0 3px" }}>{p}</span>
+    ) : (
+      <span key={i}>{p}</span>
+    )
+  );
+};
+
+const PageMemory: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const a = rise(frame, fps, 4);
+  const b = rise(frame, fps, 12);
+  const box = rise(frame, fps, 20);
+  const results = [
+    { app: "Arc", hue: "#6aa9ff", title: "Acme — Pricing", time: "Tue · 2:41pm",
+      snip: "…the Team plan adds SSO, audit logs and priority support at $40/seat — Pro stays at $20…", d: 34 },
+    { app: "Arc", hue: "#b07aff", title: "Stripe Docs — Rate limits", time: "Mon · 5:07pm",
+      snip: "…the API allows 100 read requests/sec in live mode; bursts are smoothed over a 1-second window…", d: 46 },
+  ];
+  return (
+    <AbsoluteFill style={{ background: BG }}>
+      <Vignette />
+      <div style={{ position: "absolute", top: 70, left: 130, right: 130 }}>
+        <div style={{ fontFamily: MONO, fontSize: 18, letterSpacing: 3, color: EMBER, opacity: a.opacity, transform: `translateY(${a.y}px)` }}>
+          TOTAL RECALL
+        </div>
+        <div style={{ fontFamily: SERIF, fontSize: 52, color: INK, marginTop: 8, opacity: b.opacity, transform: `translateY(${b.y}px)` }}>
+          Every web page you read — remembered
+          <span style={{ color: INK_FAINT, fontSize: 32 }}> — full page text, not just the screen</span>
+        </div>
+      </div>
+      <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", top: 100 }}>
+        <div style={{ width: 1260 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, background: "#141210", border: `1px solid ${EMBER}`, boxShadow: "0 0 0 5px rgba(255,122,69,0.12)", borderRadius: 14, padding: "20px 26px", opacity: box.opacity, transform: `translateY(${box.y}px)` }}>
+            <span style={{ color: INK_FAINT, fontSize: 28 }}>⌕</span>
+            <span style={{ fontFamily: SERIF, fontSize: 30, color: INK }}>that pricing table I read on Tuesday</span>
+          </div>
+          <div style={{ fontFamily: MONO, fontSize: 16, letterSpacing: 1, color: EMBER, marginTop: 22 }}>2 RESULTS · SEMANTIC</div>
+          {results.map((r) => {
+            const rr = rise(frame, fps, r.d);
+            return (
+              <div key={r.title} style={{ marginTop: 16, background: "linear-gradient(180deg,#141210,rgba(20,18,16,0.6))", border: `1px solid ${LINE}`, borderRadius: 14, padding: "18px 22px", opacity: rr.opacity, transform: `translateY(${rr.y}px)` }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
+                  <span style={{ width: 30, height: 30, borderRadius: 8, background: r.hue, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#0b0a09", fontFamily: MONO, fontWeight: 700, fontSize: 15 }}>{r.app[0]}</span>
+                  <span style={{ fontFamily: MONO, fontSize: 20, color: INK }}>{r.app}</span>
+                  <span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 18, color: INK_FAINT }}>{r.title} · {r.time}</span>
+                </div>
+                <div style={{ fontFamily: MONO, fontSize: 21, color: INK_DIM, marginTop: 12, lineHeight: 1.5 }}>
+                  {mark(r.snip, "pricing")}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+};
+
+// --- Scene: what to automate next ---
+const AutomateNext: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const a = rise(frame, fps, 4);
+  const b = rise(frame, fps, 12);
+  const c = rise(frame, fps, 26);
+  return (
+    <AbsoluteFill style={{ background: BG, justifyContent: "center", alignItems: "center" }}>
+      <Vignette />
+      <div style={{ fontFamily: MONO, fontSize: 18, letterSpacing: 3, color: EMBER, opacity: a.opacity, transform: `translateY(${a.y}px)` }}>
+        FOR THE AGENT ERA
+      </div>
+      <div style={{ fontFamily: SERIF, fontSize: 62, color: INK, marginTop: 14, textAlign: "center", opacity: b.opacity, transform: `translateY(${b.y}px)` }}>
+        Spot what you do on repeat
+      </div>
+      <div style={{ fontFamily: SERIF, fontSize: 38, color: INK_DIM, marginTop: 22, textAlign: "center", maxWidth: 1200, opacity: c.opacity, transform: `translateY(${c.y}px)` }}>
+        Retrace shows your <span style={{ color: INK }}>real</span> workflows — so you know exactly{" "}
+        <span style={{ color: EMBER2 }}>what to automate next</span>, and hand it to your agent.
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 // --- timeline ---
 const FADE = 16;
 const scenes: { d: number; el: React.ReactNode }[] = [
   { d: 100, el: <Brand /> },
-  { d: 150, el: <Shot src="now.png" kicker="RIGHT NOW" title="See what you're doing" sub="captioned on-device" /> },
-  { d: 150, el: <Shot src="timeline.png" kicker="REWIND" title="Scrub back through your day" /> },
-  { d: 155, el: <Shot src="search.png" kicker="FIND" title="Search your memory" sub="text · semantic · hybrid" /> },
-  { d: 175, el: <Shot src="stats.png" kicker="INSIGHT" title="Your time + system load" /> },
+  { d: 145, el: <Shot src="now.png" kicker="RIGHT NOW" title="See what you're doing" sub="captioned on-device" /> },
+  { d: 140, el: <Shot src="timeline.png" kicker="REWIND" title="Scrub back through your day" /> },
+  { d: 195, el: <PageMemory /> },
+  { d: 165, el: <Shot src="stats.png" kicker="INSIGHT" title="Your time + system load" /> },
   { d: 215, el: <ClaudeMCP /> },
-  { d: 150, el: <Features /> },
-  { d: 150, el: <Privacy /> },
+  { d: 165, el: <AutomateNext /> },
+  { d: 145, el: <Features /> },
+  { d: 145, el: <Privacy /> },
   { d: 145, el: <Outro /> },
 ];
 
