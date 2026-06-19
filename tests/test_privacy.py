@@ -44,7 +44,7 @@ def test_private_context_allowed_when_opted_in(settings):
 
 def test_sensitive_keyword_blocks(settings):
     ctx = {"bundle_id": "com.apple.Safari", "app_name": "Safari",
-           "url": "https://www.pornhub.com/view", "window_title": "video"}
+           "url": "https://forum.example.com/nsfw-thread", "window_title": "thread"}
     skip, reason = privacy.evaluate(ctx, settings)
     assert skip and reason == "sensitive"
 
@@ -70,5 +70,5 @@ def test_sensitive_disabled(settings):
 
     cfg.update_config({"block_sensitive_content": False})
     s = cfg.get_settings()
-    ctx = {"url": "https://www.pornhub.com", "window_title": "x"}
+    ctx = {"url": "https://example.com/nsfw", "window_title": "x"}
     assert privacy.is_sensitive(ctx, s) is False

@@ -95,8 +95,9 @@ class Settings(BaseSettings):
     block_sensitive_content: bool = True    # domain/keyword match on url/title
     block_sensitive_images: bool = True     # on-device SensitiveContentAnalysis image scan
     sensitive_domains: list[str] = Field(default_factory=list)  # user-editable exact/substring
+    # Generic category words only — no specific site names. Users add their own.
     sensitive_keywords: list[str] = Field(
-        default_factory=lambda: ["porn", "xxx", "nsfw", "xvideos", "pornhub", "onlyfans"]
+        default_factory=lambda: ["nsfw", "explicit", "adult"]
     )
 
     # --- page capture (opt-in, needs "Allow JavaScript from Apple Events") ---

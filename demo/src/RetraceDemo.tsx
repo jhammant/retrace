@@ -23,14 +23,18 @@ const LINE = "rgba(255,238,220,0.10)";
 const SERIF = 'Georgia, "Times New Roman", serif';
 const MONO = 'Menlo, "SF Mono", monospace';
 
-const Vignette: React.FC = () => (
-  <AbsoluteFill
-    style={{
-      background:
-        "radial-gradient(120% 90% at 70% -10%, rgba(255,122,69,0.10), transparent 55%), radial-gradient(140% 120% at 50% 120%, rgba(0,0,0,0.6), transparent 60%)",
-    }}
-  />
-);
+const Vignette: React.FC = () => {
+  const frame = useCurrentFrame();
+  const gx = 62 + Math.sin(frame / 130) * 18;
+  const gy = -8 + Math.cos(frame / 170) * 10;
+  return (
+    <AbsoluteFill
+      style={{
+        background: `radial-gradient(120% 90% at ${gx}% ${gy}%, rgba(255,122,69,0.12), transparent 55%), radial-gradient(140% 120% at 50% 120%, rgba(0,0,0,0.55), transparent 60%)`,
+      }}
+    />
+  );
+};
 
 // pure fade-up (spring is a pure fn, safe to call in loops)
 const rise = (frame: number, fps: number, delay: number) => {
@@ -161,6 +165,111 @@ const Features: React.FC = () => {
   );
 };
 
+// --- Scene: privacy promise ---
+const Privacy: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const head = rise(frame, fps, 4);
+  const sub = rise(frame, fps, 12);
+  const points = [
+    "Raw screenshots are deleted every cycle — never stored",
+    "Password managers & private/incognito windows are skipped",
+    "Sensitive content is filtered on-device, before anything is saved",
+    "Pauses when you step away · one-click Hidden mode",
+  ];
+  return (
+    <AbsoluteFill style={{ background: BG, justifyContent: "center", alignItems: "center" }}>
+      <Vignette />
+      <div style={{ fontFamily: MONO, fontSize: 18, letterSpacing: 3, color: EMBER, opacity: head.opacity, transform: `translateY(${head.y}px)` }}>
+        PRIVATE BY DESIGN
+      </div>
+      <div style={{ fontFamily: SERIF, fontSize: 60, color: INK, marginTop: 14, opacity: sub.opacity, transform: `translateY(${sub.y}px)` }}>
+        Your data never leaves your Mac
+      </div>
+      <div style={{ marginTop: 50, display: "flex", flexDirection: "column", gap: 22, width: 1080 }}>
+        {points.map((p, i) => {
+          const r = rise(frame, fps, 22 + i * 8);
+          return (
+            <div key={p} style={{ display: "flex", alignItems: "center", gap: 18, opacity: r.opacity, transform: `translateY(${r.y}px)` }}>
+              <svg width={30} height={30} viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="11" fill="none" stroke={EMBER} strokeWidth="1.6" />
+                <path d="M7 12.5l3.2 3.2L17 8.5" fill="none" stroke={EMBER} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <div style={{ fontFamily: SERIF, fontSize: 30, color: INK_DIM }}>{p}</div>
+            </div>
+          );
+        })}
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+// --- Scene: Claude Code / MCP ---
+const ClaudeMCP: React.FC = () => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const a = rise(frame, fps, 4);
+  const b = rise(frame, fps, 12);
+  const lines: { t: string; kind?: "prompt" | "dot" | "dim"; d: number }[] = [
+    { t: "❯ what was I working on this afternoon?", kind: "prompt", d: 22 },
+    { t: "", d: 30 },
+    { t: "⏺ Let me check Retrace.", kind: "dot", d: 34 },
+    { t: "  Called retrace — retrace_stats · retrace_timeline", kind: "dim", d: 42 },
+    { t: "", d: 48 },
+    { t: "⏺ You spent ~4h in VS Code on widget-api (auth.py),", kind: "dot", d: 56 },
+    { t: "  reviewed the Q3 roadmap in Notion, and pinged", d: 62 },
+    { t: "  #engineering on Slack. Chrome was only ~6 min.", d: 68 },
+    { t: "  🎵 M83 played in the background.", kind: "dim", d: 74 },
+  ];
+  return (
+    <AbsoluteFill style={{ background: BG }}>
+      <Vignette />
+      <div style={{ position: "absolute", top: 70, left: 130, right: 130 }}>
+        <div style={{ fontFamily: MONO, fontSize: 18, letterSpacing: 3, color: EMBER, opacity: a.opacity, transform: `translateY(${a.y}px)` }}>
+          ASK YOUR AI
+        </div>
+        <div style={{ fontFamily: SERIF, fontSize: 52, color: INK, marginTop: 8, opacity: b.opacity, transform: `translateY(${b.y}px)` }}>
+          Works as an MCP server
+          <span style={{ color: INK_FAINT, fontSize: 34 }}> — query your day from Claude Code</span>
+        </div>
+      </div>
+      <AbsoluteFill style={{ justifyContent: "center", alignItems: "center", top: 110 }}>
+        <div style={{ width: 1240, background: "#141210", border: `1px solid ${LINE}`, borderRadius: 14, overflow: "hidden", boxShadow: "0 50px 120px -30px rgba(0,0,0,0.85)" }}>
+          <div style={{ height: 46, background: "#1c1916", borderBottom: `1px solid ${LINE}`, display: "flex", alignItems: "center", paddingLeft: 18, gap: 9 }}>
+            {["#ff6f6f", "#ffd166", "#74e0a3"].map((c) => (
+              <div key={c} style={{ width: 13, height: 13, borderRadius: "50%", background: c }} />
+            ))}
+            <div style={{ fontFamily: MONO, fontSize: 17, color: INK_FAINT, marginLeft: 14 }}>claude — widget-api</div>
+          </div>
+          <div style={{ padding: "34px 44px", fontFamily: MONO, fontSize: 25, lineHeight: 1.75, minHeight: 360 }}>
+            {lines.map((ln, i) => {
+              const r = rise(frame, fps, ln.d);
+              const color = ln.kind === "prompt" ? EMBER2 : ln.kind === "dim" ? INK_FAINT : INK;
+              const marker = ln.t[0];
+              const rest = ln.t.slice(1);
+              return (
+                <div key={i} style={{ opacity: r.opacity, transform: `translateY(${r.y / 3}px)`, color, minHeight: 36 }}>
+                  {marker === "⏺" || marker === "❯" ? (
+                    <span>
+                      <span style={{ color: EMBER }}>{marker}</span>
+                      {rest}
+                    </span>
+                  ) : (
+                    ln.t
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{ marginTop: 26, fontFamily: MONO, fontSize: 21, color: INK_DIM, opacity: rise(frame, fps, 86).opacity }}>
+          $ claude mcp add retrace &nbsp;·&nbsp; 7 read-only tools &nbsp;·&nbsp; no writes, no cloud
+        </div>
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+};
+
 // --- Scene: outro ---
 const Outro: React.FC = () => {
   const frame = useCurrentFrame();
@@ -188,13 +297,15 @@ const Outro: React.FC = () => {
 // --- timeline ---
 const FADE = 16;
 const scenes: { d: number; el: React.ReactNode }[] = [
-  { d: 105, el: <Brand /> },
-  { d: 170, el: <Shot src="now.png" kicker="RIGHT NOW" title="See what you're doing" sub="captioned on-device" /> },
-  { d: 170, el: <Shot src="timeline.png" kicker="REWIND" title="Scrub back through your day" /> },
-  { d: 175, el: <Shot src="search.png" kicker="FIND" title="Search your memory" sub="text · semantic · hybrid" /> },
-  { d: 200, el: <Shot src="stats.png" kicker="INSIGHT" title="Your time + system load" /> },
+  { d: 100, el: <Brand /> },
+  { d: 150, el: <Shot src="now.png" kicker="RIGHT NOW" title="See what you're doing" sub="captioned on-device" /> },
+  { d: 150, el: <Shot src="timeline.png" kicker="REWIND" title="Scrub back through your day" /> },
+  { d: 155, el: <Shot src="search.png" kicker="FIND" title="Search your memory" sub="text · semantic · hybrid" /> },
+  { d: 175, el: <Shot src="stats.png" kicker="INSIGHT" title="Your time + system load" /> },
+  { d: 215, el: <ClaudeMCP /> },
   { d: 150, el: <Features /> },
-  { d: 150, el: <Outro /> },
+  { d: 150, el: <Privacy /> },
+  { d: 145, el: <Outro /> },
 ];
 
 export const DURATION =

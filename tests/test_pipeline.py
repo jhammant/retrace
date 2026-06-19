@@ -243,8 +243,8 @@ def test_hidden_mode_skips(settings, monkeypatch):
 
 def test_sensitive_url_skips(settings, monkeypatch):
     _patch(monkeypatch, context=fake_context_factory(
-        app="Safari", bundle="com.apple.Safari", url="https://www.pornhub.com/x",
-        window="video", text="some text"))
+        app="Safari", bundle="com.apple.Safari", url="https://example.com/nsfw-clip",
+        window="clip", text="some text"))
     StatusLedger(settings).set_enabled(True)
     result = pipeline.capture_once(settings=settings)
     assert result.status == "skipped"
