@@ -40,7 +40,8 @@ These are hard invariants, enforced in code and covered by tests — not prefere
   scan) are all skipped before anything is stored.
 - **Hidden mode.** One click pauses all recording (optionally for a set time).
 - **Bounded retention.** Rows + thumbnails older than your window (default 30 days)
-  are purged automatically, with a manual purge too.
+  are purged automatically, with a manual purge too. Ageing thumbnails are shrunk
+  in place on-device (see [Storage](#storage)).
 - **Local bind only.** API and MCP listen on `127.0.0.1`.
 - **No telemetry.** Zero analytics, zero phone-home.
 
@@ -250,7 +251,31 @@ Edit the common ones in the Settings panel. Keys include: `capture_interval_s`,
 `thumb_max_edge`, `enable_semantic_search`, `enable_caption`, `denylist_bundle_ids`,
 `capture_private_browsing`, `block_sensitive_content`, `block_sensitive_images`,
 `sensitive_domains`, `sensitive_keywords`, `capture_page_text`, `capture_page_html`,
-`enable_plugins`, `disabled_plugins`.
+`enable_plugins`, `disabled_plugins`, `auto_optimize`, `compact_after_days`,
+`deep_compact_after_days`, `max_storage_mb`.
+
+## Storage
+
+Frames are written as ~250 KB JPEGs (1280 px). Recent days stay exactly as captured;
+once a day the daemon re-encodes older days in place, then never touches them again:
+
+| Tier | Default | What happens | Typical size |
+|---|---|---|---|
+| `compact` | after 3 days | same 1280 px, JPEG quality 60 | ~45% of original |
+| `deep` | after 14 days | 960 px, JPEG quality 55 | ~25% of original |
+
+Text, OCR, captions and embeddings are untouched, so search is unaffected. Set
+`max_storage_mb` for a hard ceiling: the oldest days lose their thumbnails first and keep
+their searchable text. Each daily pass is time-boxed (`optimize_max_seconds`, default 300)
+and resumes where it stopped.
+
+```bash
+retrace optimize --dry-run   # what would be saved, changes nothing
+retrace optimize             # run a pass now
+```
+
+On a month of real use this took 2.1 GB down to about 1.1 GB, which is enough headroom to
+shorten `capture_interval_s` from 45 s to 20 s for roughly the disk use the default had before.
 
 ---
 

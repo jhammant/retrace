@@ -70,6 +70,7 @@ class CaptureDaemon:
         self._watch_proc: subprocess.Popen | None = None
         self._threads: list[threading.Thread] = []
         self._last_purge_day: str | None = None
+        self._optimizing = threading.Lock()
         self._last_app: str | None = None
         self._last_activity_scan: float = 0.0
         self._activity_scan_interval_s: float = 600.0  # refresh knowledgeC/browser data ~every 10 min
@@ -278,6 +279,10 @@ class CaptureDaemon:
 
         purge_older_than(self._s.retention_days, self._s)
 
+        # Shrink ageing thumbnails off the capture path, with a time budget.
+        if self._s.auto_optimize:
+            threading.Thread(target=self._run_optimize, name="retrace-optimize", daemon=True).start()
+
         # Ingest app-plugin data (e.g. Claude Code history) once per day.
         try:
             from ..plugins.registry import run_collectors
@@ -285,6 +290,19 @@ class CaptureDaemon:
             run_collectors(self._s)
         except Exception:
             log.debug("plugin collectors failed", exc_info=True)
+
+
+    def _run_optimize(self) -> None:
+        if not self._optimizing.acquire(blocking=False):
+            return
+        try:
+            from .optimize import optimize
+
+            optimize(self._s, max_seconds=self._s.optimize_max_seconds)
+        except Exception:
+            log.exception("storage optimise failed")
+        finally:
+            self._optimizing.release()
 
 
 def _main() -> int:  # pragma: no cover - manual run helper

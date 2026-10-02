@@ -80,6 +80,16 @@ class Settings(BaseSettings):
     # --- retention ----------------------------------------------------------
     retention_days: int = 30             # purge captures/thumbnails older than this
 
+    # --- storage optimiser (retrace optimize; runs daily in the daemon) ------
+    auto_optimize: bool = True           # re-encode ageing thumbnails once a day
+    compact_after_days: int = 3          # tier 1: same size, lower JPEG quality (0 = off)
+    compact_jpeg_quality: int = 60
+    deep_compact_after_days: int = 14    # tier 2: smaller and lower quality (0 = off)
+    deep_compact_max_edge: int = 960
+    deep_compact_jpeg_quality: int = 55
+    max_storage_mb: int = 0              # hard ceiling; oldest thumbnails go first (0 = off)
+    optimize_max_seconds: float = 300.0  # time budget per daily pass; the rest resumes next day
+
     # --- features -----------------------------------------------------------
     enable_semantic_search: bool = True  # compute & store NL embeddings
     enable_caption: bool = True          # Foundation Models caption
@@ -177,6 +187,10 @@ EDITABLE_KEYS: tuple[str, ...] = (
     "min_ax_text_len",
     "thumb_max_edge",
     "retention_days",
+    "auto_optimize",
+    "compact_after_days",
+    "deep_compact_after_days",
+    "max_storage_mb",
     "enable_semantic_search",
     "enable_caption",
     "enable_vlm_caption",
