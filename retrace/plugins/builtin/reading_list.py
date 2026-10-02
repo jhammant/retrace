@@ -69,6 +69,7 @@ def _archive_text(archives_dir: Path, item_id: str | None) -> str:
 class ReadingListPlugin(RetracePlugin):
     name = "reading-list"
     description = "Ingest Safari Reading List articles + offline content (on-device)."
+    platforms = ("darwin",)
 
     def __init__(self, bookmarks_path: Path | None = None, archives_dir: Path | None = None) -> None:
         self._bookmarks = bookmarks_path

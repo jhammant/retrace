@@ -20,7 +20,17 @@ BROWSER_BUNDLES = {
     "com.apple.Safari", "com.google.Chrome", "com.google.Chrome.canary",
     "com.brave.Browser", "com.microsoft.edgemac", "com.vivaldi.Vivaldi",
     "company.thebrowser.Browser",
+    # Windows app ids are executable names.
+    "chrome.exe", "msedge.exe", "brave.exe", "vivaldi.exe", "opera.exe", "arc.exe",
+    "firefox.exe",
 }
+# Idle-aware "active" samples record the app's display name, not its id.
+BROWSER_NAMES = {
+    "Safari", "Google Chrome", "Microsoft Edge", "Brave Browser", "Firefox", "Vivaldi",
+    "Opera", "Arc", "Chromium",
+}
+# activity_events sources that are browser visits.
+HISTORY_SOURCES = ["safari", "chrome", "edge", "brave"]
 
 
 def _local_tz():
@@ -43,6 +53,9 @@ def _range_bounds(start_str: str, end_str: str) -> tuple[datetime, datetime]:
 def _pretty_bundle(bundle: str) -> str:
     if not bundle:
         return "Unknown"
+    if bundle.lower().endswith(".exe"):  # Windows app id, e.g. "msedge.exe"
+        stem = bundle[:-4]
+        return stem[:1].upper() + stem[1:] if stem else bundle
     tail = bundle.split(".")[-1]
     return tail[:1].upper() + tail[1:] if tail else bundle
 
@@ -111,7 +124,7 @@ def time_per_domain(start: datetime, end: datetime, settings: Settings | None = 
     with session_scope(s) as session:
         visits = session.execute(
             select(ActivityEvent.url, func.count())
-            .where(ActivityEvent.source.in_(["safari", "chrome"]),
+            .where(ActivityEvent.source.in_(HISTORY_SOURCES),
                    ActivityEvent.start_at >= start, ActivityEvent.start_at < end)
             .group_by(ActivityEvent.url)
         ).all()
@@ -121,6 +134,13 @@ def time_per_domain(start: datetime, end: datetime, settings: Settings | None = 
                    ActivityEvent.app.in_(BROWSER_BUNDLES),
                    ActivityEvent.start_at >= start, ActivityEvent.start_at < end)
         ).scalar() or 0.0
+        if not browser_focus:  # no knowledgeC (Windows, or no Full Disk Access)
+            browser_focus = session.execute(
+                select(func.sum(ActivityEvent.seconds))
+                .where(ActivityEvent.source == "active",
+                       ActivityEvent.app.in_(BROWSER_NAMES),
+                       ActivityEvent.start_at >= start, ActivityEvent.start_at < end)
+            ).scalar() or 0.0
 
     dom: dict[str, int] = {}
     for url, cnt in visits:

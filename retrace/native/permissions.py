@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Settings, get_settings
+from ..platform import IS_WINDOWS
 from .helpers import get_presence
 
 GRANTED = "granted"
@@ -28,6 +29,11 @@ _GUIDANCE = {
     "calendar": "System Settings → Privacy & Security → Calendars → enable your terminal/Retrace.",
     "full_disk_access": "System Settings → Privacy & Security → Full Disk Access → enable your terminal/Retrace (needed to read knowledgeC.db focus history).",
     "swift_toolchain": "Install the Xcode command line tools: xcode-select --install.",
+    # Windows
+    "screen_capture": "Retrace captures the primary display of the signed-in desktop; run it in your own session, not as a service.",
+    "ocr_language": "Settings > Time & language > Language & region > add a language (its OCR pack installs with it).",
+    "ui_automation": "Reinstall retrace-cli on Windows (it pulls in comtypes) to read browser URLs.",
+    "tray": "Reinstall retrace-cli on Windows (it pulls in pystray) for the tray icon.",
 }
 
 
@@ -53,8 +59,52 @@ def _full_disk_access() -> str:
         return UNKNOWN
 
 
+def _check_windows(s: Settings) -> dict[str, Any]:
+    """Windows grants desktop apps screen capture and UI Automation without prompts;
+    what can be missing is an OCR language pack or an optional package."""
+    pres = get_presence(s.idle_threshold_s, settings=s) or {}
+    try:
+        from .win.ocr import available as ocr_available
+
+        ocr_ok, ocr_detail = ocr_available()
+    except Exception as exc:
+        ocr_ok, ocr_detail = False, str(exc)
+    try:
+        from .win.uia import available as uia_available
+
+        uia_ok = uia_available()
+    except Exception:
+        uia_ok = False
+    try:
+        import pystray  # noqa: F401
+
+        tray_ok = True
+    except Exception:
+        tray_ok = False
+    return {
+        "screen_capture": _entry(
+            GRANTED if pres.get("ok") else UNKNOWN, required=True, key="screen_capture",
+            detail="No permission needed on Windows.",
+        ),
+        "ocr_language": _entry(
+            GRANTED if ocr_ok else DENIED, required=True, key="ocr_language",
+            detail=f"Windows OCR reads on-screen text ({ocr_detail}).",
+        ),
+        "ui_automation": _entry(
+            GRANTED if uia_ok else DENIED, required=False, key="ui_automation",
+            detail="Reads browser URLs and private-window state.",
+        ),
+        "tray": _entry(
+            GRANTED if tray_ok else DENIED, required=False, key="tray",
+            detail="Notification-area icon (retrace menubar).",
+        ),
+    }
+
+
 def check_all(settings: Settings | None = None) -> dict[str, Any]:
     s = settings or get_settings()
+    if IS_WINDOWS:
+        return _check_windows(s)
 
     pres = get_presence(s.idle_threshold_s, settings=s) or {}
     sr = pres.get("screen_recording")

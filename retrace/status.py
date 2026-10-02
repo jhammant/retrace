@@ -11,6 +11,7 @@ import json
 import os
 import tempfile
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -60,6 +61,23 @@ def _default_state() -> dict[str, Any]:
     }
 
 
+def _replace(src: str, dst: Path, attempts: int = 20) -> None:
+    """``os.replace`` that rides out a reader holding ``dst`` open.
+
+    Windows refuses to replace a file another process has open (the CLI, the tray
+    or a second server reading status.json), where POSIX would just swap the inode.
+    Readers hold it for microseconds, so a short retry is enough.
+    """
+    for i in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if i == attempts - 1:
+                raise
+            time.sleep(0.01 * (i + 1))
+
+
 class StatusLedger:
     """Thread-safe accessor for the JSON status file."""
 
@@ -92,7 +110,7 @@ class StatusLedger:
         try:
             with os.fdopen(fd, "w") as fh:
                 json.dump(data, fh, indent=2, sort_keys=False)
-            os.replace(tmp, self._path)
+            _replace(tmp, self._path)
         finally:
             if os.path.exists(tmp):
                 os.unlink(tmp)

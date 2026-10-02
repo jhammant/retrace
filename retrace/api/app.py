@@ -69,7 +69,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Retrace",
         version=__version__,
-        description="Private, on-device macOS rewind. 100% local, no telemetry.",
+        description="Private, on-device rewind for macOS and Windows. 100% local, no telemetry.",
         lifespan=lifespan,
     )
 

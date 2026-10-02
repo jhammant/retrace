@@ -35,6 +35,7 @@ def _utc(cf_time: float) -> datetime:
 class SafariHistoryPlugin(RetracePlugin):
     name = "safari-history"
     description = "Ingest Safari history (incl. iPhone visits synced via iCloud)."
+    platforms = ("darwin",)
 
     def __init__(self, db_path: Path | None = None) -> None:
         self._db_path = db_path

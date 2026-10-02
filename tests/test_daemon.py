@@ -24,6 +24,7 @@ def test_power_state_parsing(monkeypatch):
         return P(" lowpowermode         1\n")
 
     monkeypatch.setattr(D.subprocess, "run", fake_run)
+    monkeypatch.setattr(D, "IS_WINDOWS", False)  # the pmset (macOS) path
     ps = D.power_state()
     assert ps["on_battery"] is True
     assert ps["low_power"] is True

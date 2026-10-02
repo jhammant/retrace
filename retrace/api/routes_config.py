@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Body, HTTPException
 
 from ..config import EDITABLE_KEYS, get_settings, update_config
+from ..platform import PLATFORM
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -16,7 +17,7 @@ def _current() -> dict:
 
 @router.get("")
 def read_config() -> dict:
-    return {"config": _current(), "editable_keys": list(EDITABLE_KEYS)}
+    return {"config": _current(), "editable_keys": list(EDITABLE_KEYS), "platform": PLATFORM}
 
 
 @router.post("")
