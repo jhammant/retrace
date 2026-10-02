@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import resource
 import subprocess
 import threading
 import time
@@ -23,6 +25,13 @@ from datetime import datetime
 from ..config import Settings, get_settings
 from ..native.helpers import get_helper
 from .pipeline import capture_once
+
+
+def fd_usage() -> tuple[int, int]:
+    """(open descriptors, soft RLIMIT_NOFILE) for this process."""
+    used = len(os.listdir("/dev/fd"))
+    soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    return used, int(soft)
 
 log = logging.getLogger("retrace.daemon")
 
@@ -92,6 +101,10 @@ class CaptureDaemon:
         for t in self._threads:
             t.start()
         log.info("daemon started (watcher=%s, fallback=%s)", self._enable_watcher, self._enable_fallback)
+
+    def is_alive(self) -> bool:
+        """True while every daemon thread is still running."""
+        return bool(self._threads) and all(t.is_alive() for t in self._threads)
 
     def stop(self) -> None:
         if not self._started:
@@ -214,6 +227,23 @@ class CaptureDaemon:
             self._trigger("tick")
             self._record_active(interval)
             self._poll_plugins()
+            self._check_fd_headroom()
+
+    def _check_fd_headroom(self) -> None:
+        """Self-heal the one failure mode that stays invisible to a supervisor.
+
+        A descriptor leak leaves the process *up* while every open() fails, so
+        launchd's KeepAlive never fires and capture silently stops (this lost
+        most of three weeks in Aug/Sep 2026). If we are within 10% of
+        RLIMIT_NOFILE, exit non-zero so the supervisor restarts us cleanly.
+        """
+        try:
+            used, limit = fd_usage()
+        except OSError:
+            return
+        if limit and used >= limit * 0.9:
+            log.critical("fd exhaustion imminent (%d/%d open) -- exiting for supervisor restart", used, limit)
+            os._exit(3)
 
     def _effective_interval(self) -> float:
         base = self._s.capture_interval_s
