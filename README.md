@@ -2,19 +2,22 @@
 
 [![tests](https://github.com/jhammant/retrace/actions/workflows/ci.yml/badge.svg)](https://github.com/jhammant/retrace/actions/workflows/ci.yml)
 &nbsp;![macOS](https://img.shields.io/badge/macOS-14%2B-black?logo=apple)
+&nbsp;![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows)
 &nbsp;![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 &nbsp;![License](https://img.shields.io/badge/license-Apache--2.0-green)
 &nbsp;![on-device](https://img.shields.io/badge/100%25-on--device-ff7a45)
 
-**A private, on-device "rewind" for your Mac.** Retrace quietly captures what's on
+**A private, on-device "rewind" for your Mac or Windows PC.** Retrace quietly captures what's on
 your screen, extracts the text and context, and lets you *search and scrub back
 through your day* — plus time/usage analytics. Everything runs **100% on your
 machine**. No data ever leaves it. No accounts. **No telemetry.**
 
-> **macOS only, on-device only.** Retrace is built for macOS so it can lean on
-> native frameworks — ScreenCaptureKit, Accessibility, Vision, **Foundation Models**
+> **On-device only, on macOS and Windows.** Retrace leans on each OS's own
+> frameworks. On macOS: ScreenCaptureKit, Accessibility, Vision, **Foundation Models**
 > (the on-device LLM), NaturalLanguage embeddings, SensitiveContentAnalysis, and
-> EventKit. There is no cloud component, by design.
+> EventKit. On Windows: the Win32 desktop APIs, UI Automation, and the built-in
+> Windows OCR engine. There is no cloud component, by design. See
+> [Windows](#windows) for what differs.
 
 ---
 
@@ -51,7 +54,7 @@ These are hard invariants, enforced in code and covered by tests — not prefere
 
 | | |
 |---|---|
-| **Menu bar** | A native status-bar item (`retrace menubar`) to see live state and counters, capture now, pause, toggle Hidden mode, and open the dashboard. |
+| **Menu bar** | A native status-bar item (`retrace menubar`; a tray icon on Windows) to see live state and counters, capture now, pause, toggle Hidden mode, and open the dashboard. |
 | **Now** | The latest capture, framed like a film cell, with a one-line on-device LLM caption. |
 | **Timeline** | Reverse-chronological, infinite-scroll history. Click any moment to expand its full text + thumbnail. |
 | **Search** | One box, three modes — **text** (FTS5), **semantic** (NaturalLanguage embeddings, fully local), and **hybrid**. |
@@ -107,6 +110,26 @@ uv run retrace menubar  # add the menu bar icon (starts the server if needed)
 The first capture triggers macOS permission prompts (Screen Recording,
 Accessibility). `retrace doctor` tells you exactly what's missing and how to grant it.
 
+### Quickstart on Windows
+
+Requires Windows 10 or 11 and [`uv`](https://docs.astral.sh/uv/). Nothing is compiled
+and no admin rights are needed. In PowerShell:
+
+```powershell
+uv venv --python 3.13
+uv pip install -e ".[dev]"
+uv run retrace init       # create ~/.retrace (config + database). Capture is OFF.
+uv run retrace doctor     # check the OCR language, UI Automation and tray
+uv run retrace start      # enable capture
+uv run retrace tick --force
+uv run retrace menubar    # tray icon (starts the server on http://127.0.0.1:8765)
+uv run retrace autostart install   # optional: start at sign-in
+```
+
+On-screen text comes from the Windows OCR engine, which needs an OCR language pack.
+Most installs already have one; if `retrace doctor` says otherwise, add a language under
+Settings > Time & language > Language & region.
+
 ---
 
 ## Architecture
@@ -132,6 +155,9 @@ Accessibility). `retrace doctor` tells you exactly what's missing and how to gra
         Safari / Chrome history are read directly for time analytics.
 ```
 
+On Windows nothing is compiled: `retrace/native/win` serves the same JSON in-process
+(see [Windows](#windows)).
+
 The capture cycle: **gate** (enabled / present / hidden) → **context** (app, window,
 URL, text) → **privacy** (denylist / incognito / sensitive) → **dedup** → **frame +
 thumbnail** → **on-device sensitivity scan** → **text** (Accessibility, else OCR) →
@@ -153,6 +179,49 @@ thumbnail** → **on-device sensitivity scan** → **text** (Accessibility, else
 
 For full-page text capture, also enable "Allow JavaScript from Apple Events" in your
 browser (Safari: Develop menu; Chrome: View → Developer).
+
+Windows has no per-app grants for screen capture or UI Automation, so the only thing
+`retrace doctor` can flag there is a missing OCR language pack (or a missing optional
+package such as the tray icon's).
+
+---
+
+## Windows
+
+The Python core (pipeline, daemon, API, web UI, search, MCP, plugins) is the same on
+both systems. Each macOS helper has a Windows counterpart in `retrace/native/win`:
+
+| macOS | Windows |
+|---|---|
+| ScreenCaptureKit frame | primary display via GDI; **denylisted apps' windows are painted black** before the frame or thumbnail is written |
+| Accessibility text | Windows OCR on every frame (UI Automation text is not read) |
+| browser URL + incognito (AppleScript) | address bar via UI Automation; private windows recognised from the window title and accessible name |
+| idle / lock / display sleep | idle time + session lock (display sleep is covered by the idle gate) |
+| app-switch events (NSWorkspace) | foreground-window events (SetWinEventHook) |
+| NaturalLanguage embeddings | hashed word + trigram vectors: lexical, so "semantic" search finds typos and word forms, not synonyms |
+| menu bar item | notification-area (tray) icon |
+| launchd agent | `retrace autostart install`: a shortcut in your Startup folder |
+
+App ids on Windows are executable names (`chrome.exe`, `1password.exe`); the default
+denylist covers the common password managers in both forms.
+
+Not available on Windows: Foundation Models captions (a template caption is used), the
+SensitiveContentAnalysis image scan (domain/keyword blocking still runs), full-page text
+and raw HTML capture, and the Calendar, Apple Music, Mail, Safari history and Reading List
+plugins. Spotify, clipboard, recent files, notifications and downloads read their
+Windows sources; activity ingest reads Chrome, Edge and Brave history.
+
+Privacy notes specific to Windows:
+
+- Private-window detection relies on the browser marking the window ("InPrivate",
+  "Incognito", "Private Browsing"). Edge, Firefox and Brave do this in the title; Chrome
+  does it in the accessible name, which Retrace reads via UI Automation. Leave
+  `capture_private_browsing` off (the default), and check it with your own browser
+  before relying on it.
+- Clipboard logging (off by default) never reads copies that a password manager marks
+  as excluded from clipboard monitoring.
+- Asking Chromium browsers for their address bar over UI Automation can switch on their
+  accessibility support, which costs some memory and CPU on heavy pages.
 
 ---
 
@@ -313,6 +382,10 @@ A launchd user-agent template lives at `scripts/com.retrace.daemon.plist` (edit 
 two absolute paths, then `launchctl load -w ~/Library/LaunchAgents/...`). See the
 comments in that file for install/uninstall.
 
+On Windows, `retrace autostart install` adds a Startup-folder shortcut that opens the
+tray icon (which starts the server) at sign-in; `retrace autostart remove` undoes it.
+When started without a console, the server logs to `~/.retrace/server.log`.
+
 ---
 
 ## Development
@@ -333,7 +406,7 @@ Native helpers are stubbed by default so the suite is fast and needs no Swift to
 | `~/.retrace/tmp/` | transient raw frames (deleted every cycle) |
 | `~/.retrace/status.json` | capture ledger |
 | `~/.retrace/config.toml` | user config |
-| `~/.retrace/bin/` | compiled Swift helpers (cache) |
+| `~/.retrace/bin/` | compiled Swift helpers (cache, macOS) |
 | `~/.retrace/plugins/` | your custom app plugins |
 
 Screenshots of the UI live in [`docs/screenshots/`](docs/screenshots).
@@ -342,5 +415,5 @@ Screenshots of the UI live in [`docs/screenshots/`](docs/screenshots).
 
 ## License
 
-[Apache-2.0](LICENSE). Built only on third-party + Apple frameworks. No telemetry,
+[Apache-2.0](LICENSE). Built only on third-party and OS frameworks. No telemetry,
 ever.
