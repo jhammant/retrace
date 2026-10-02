@@ -68,3 +68,17 @@ def test_update_config_rejects_unknown_key(settings):
 
     with pytest.raises(KeyError):
         cfg.update_config({"home": "/tmp/evil"})
+
+
+def test_update_config_keeps_non_editable_keys_already_in_the_file(settings):
+    from retrace import config as cfg
+
+    settings.config_path.write_text("bind_port = 8766\nretention_days = 30\n")
+    s = cfg.reload_settings()
+    assert s.bind_port == 8766
+
+    s = cfg.update_config({"retention_days": 14})
+
+    assert s.retention_days == 14
+    assert s.bind_port == 8766
+    assert "bind_port = 8766" in settings.config_path.read_text()

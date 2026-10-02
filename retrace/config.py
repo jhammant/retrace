@@ -10,6 +10,7 @@ test suite isolates itself from a real installation.
 from __future__ import annotations
 
 import os
+import tomllib
 from functools import lru_cache
 from pathlib import Path
 
@@ -245,7 +246,14 @@ def write_default_config(path: Path | None = None, *, overwrite: bool = False) -
 def update_config(updates: dict[str, object]) -> Settings:
     """Merge ``updates`` into config.toml (only EDITABLE_KEYS) and reload settings."""
     s = get_settings()
-    current: dict[str, object] = {k: getattr(s, k) for k in EDITABLE_KEYS}
+    # Keep keys that are set in the file but not editable here (e.g. bind_port), so saving
+    # settings from the web panel can't silently reset them.
+    current: dict[str, object] = {}
+    try:
+        current = tomllib.loads(s.config_path.read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        pass
+    current.update({k: getattr(s, k) for k in EDITABLE_KEYS})
     for key, value in updates.items():
         if key not in EDITABLE_KEYS:
             raise KeyError(f"{key!r} is not an editable setting")
