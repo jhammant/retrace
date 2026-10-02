@@ -86,7 +86,53 @@ def create_app() -> FastAPI:
 
     @app.get("/api/health", tags=["meta"])
     def health() -> dict:
-        return {"ok": True, "name": "retrace", "version": __version__}
+        """Liveness, not just readiness.
+
+        ``ok`` is False when the capture loop has stopped touching the status
+        ledger (it writes every cycle, even gated ones), when the daemon thread
+        is gone, or when descriptors are nearly exhausted. A process that is up
+        but not capturing is DOWN.
+        """
+        from datetime import datetime, timezone
+
+        from ..status import StatusLedger
+
+        s = get_settings()
+        out: dict = {"ok": True, "name": "retrace", "version": __version__, "problems": []}
+        daemon = getattr(app.state, "daemon", None)
+        out["daemon"] = "disabled" if daemon is None else ("alive" if daemon.is_alive() else "dead")
+        if daemon is not None and not daemon.is_alive():
+            out["problems"].append("daemon thread dead")
+
+        snap = StatusLedger(s).snapshot()
+        out["enabled"] = bool(snap.get("enabled"))
+        out["last_capture_at"] = snap.get("last_capture_at")
+        out["last_error"] = snap.get("last_error")
+        out["last_gate"] = snap.get("last_gate")
+        stale_after = max(300.0, s.capture_interval_s * 6)
+        try:
+            updated = datetime.fromisoformat(snap["updated_at"])
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+            age = (datetime.now(timezone.utc) - updated).total_seconds()
+        except (KeyError, TypeError, ValueError):
+            age = None
+        out["ledger_age_s"] = None if age is None else round(age)
+        if daemon is not None and out["enabled"] and (age is None or age > stale_after):
+            out["problems"].append(f"capture loop stale: ledger last written {out['ledger_age_s']}s ago")
+
+        try:
+            from ..capture.daemon import fd_usage
+
+            used, limit = fd_usage()
+            out["fds"] = {"open": used, "limit": limit}
+            if limit and used >= limit * 0.8:
+                out["problems"].append(f"fd pressure {used}/{limit}")
+        except (OSError, ModuleNotFoundError):
+            pass
+
+        out["ok"] = not out["problems"]
+        return out
 
     # Mount the static web UI last so API routes take precedence.
     if WEB_DIR.is_dir():

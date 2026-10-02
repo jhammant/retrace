@@ -14,9 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 import sqlite3
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -27,6 +25,7 @@ from ..config import Settings, get_settings
 from ..db import session_scope
 from ..models import ActivityEvent, utcnow
 from ..native.helpers import get_presence
+from ..tmpcopy import temp_copy
 
 log = logging.getLogger("retrace.activity")
 
@@ -155,41 +154,37 @@ def read_chrome(cutoff: datetime | None) -> list[dict]:
         return []
     cutoff_chrome = ((cutoff.replace(tzinfo=timezone.utc).timestamp() + CHROME_OFFSET) * 1_000_000) if cutoff else 0
     rows: list[dict] = []
-    # Chrome locks its live DB; copy to a temp file first.
-    tmp = None
+    # Chrome locks its live DB; copy to a temp file first. temp_copy owns and
+    # closes the descriptor -- the old inline mkstemp leaked one fd per scan.
     try:
-        fd, tmp_path = tempfile.mkstemp(suffix=".chrome.db")
-        Path(tmp_path).write_bytes(_CHROME.read_bytes())
-        tmp = Path(tmp_path)
+        with temp_copy(_CHROME, suffix=".chrome.db") as tmp:
+            conn = sqlite3.connect(str(tmp), timeout=2)
+            try:
+                cur = conn.execute(
+                    """
+                    SELECT u.url, v.visit_time, u.title
+                    FROM visits v JOIN urls u ON u.id = v.url
+                    WHERE v.visit_time > ?
+                    ORDER BY v.visit_time
+                    """,
+                    (cutoff_chrome,),
+                )
+                for url, vtime, title in cur:
+                    if not vtime or not url:
+                        continue
+                    start = _utc_from_ts(vtime / 1_000_000 - CHROME_OFFSET)
+                    rows.append({
+                        "source": "chrome", "app": "com.google.Chrome", "url": url, "title": title,
+                        "start_at": start, "end_at": None, "seconds": 0.0,
+                        "day": _local_day(start), "detail": None,
+                    })
+            except sqlite3.Error as exc:
+                log.warning("Chrome read failed: %s", exc)
+            finally:
+                conn.close()
     except OSError as exc:
         log.info("Chrome history copy failed (%s)", exc)
         return []
-    try:
-        conn = sqlite3.connect(str(tmp), timeout=2)
-        cur = conn.execute(
-            """
-            SELECT u.url, v.visit_time, u.title
-            FROM visits v JOIN urls u ON u.id = v.url
-            WHERE v.visit_time > ?
-            ORDER BY v.visit_time
-            """,
-            (cutoff_chrome,),
-        )
-        for url, vtime, title in cur:
-            if not vtime or not url:
-                continue
-            start = _utc_from_ts(vtime / 1_000_000 - CHROME_OFFSET)
-            rows.append({
-                "source": "chrome", "app": "com.google.Chrome", "url": url, "title": title,
-                "start_at": start, "end_at": None, "seconds": 0.0,
-                "day": _local_day(start), "detail": None,
-            })
-        conn.close()
-    except sqlite3.Error as exc:
-        log.warning("Chrome read failed: %s", exc)
-    finally:
-        if tmp and tmp.exists():
-            tmp.unlink(missing_ok=True)
     return rows
 
 

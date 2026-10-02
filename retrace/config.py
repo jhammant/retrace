@@ -50,6 +50,19 @@ _DEFAULT_DENYLIST_BUNDLE_IDS: list[str] = [
 ]
 
 
+# Hosts the page-content backfill must never re-fetch: authenticated/personal
+# surfaces where a cookie-less server fetch would only ever hit a login wall (or
+# worse, expose that you re-requested them). Matched as host == entry or a
+# subdomain suffix. Loopback/LAN/link-local hosts are blocked separately.
+_DEFAULT_BACKFILL_SKIP_DOMAINS: list[str] = [
+    "mail.google.com", "accounts.google.com", "calendar.google.com",
+    "drive.google.com", "docs.google.com", "outlook.office.com", "outlook.live.com",
+    "mail.proton.me", "x.com", "twitter.com", "linkedin.com", "facebook.com",
+    "instagram.com", "messenger.com", "web.whatsapp.com", "slack.com",
+    "notion.so", "discord.com", "reddit.com",
+]
+
+
 class Settings(BaseSettings):
     """Runtime settings. Field names map to ``RETRACE_<UPPER>`` environment variables."""
 
@@ -125,6 +138,16 @@ class Settings(BaseSettings):
     git_repo_roots: list[str] = Field(default_factory=lambda: ["~/dev", "~/Developer", "~/Projects", "~/code"])
     recent_files_days: int = 7
     log_clipboard: bool = False  # opt-in: clipboard history can contain sensitive text (passwords)
+
+    # --- Safari history + page-content backfill -----------------------------
+    # Safari history (incl. iPhone visits synced via iCloud) and Reading List are
+    # read locally — fully on-device. Page backfill is the one feature that makes
+    # OUTBOUND requests, so it is opt-in and heavily guard-railed.
+    safari_history_days: int = 7         # how many days of Safari/iCloud history to ingest
+    reading_list_max: int = 300          # cap on Reading List items ingested per run
+    backfill_page_content: bool = False  # OPT-IN: re-fetch public history URLs to capture page text
+    backfill_max_pages_per_run: int = 40  # politeness cap per backfill pass
+    backfill_skip_domains: list[str] = Field(default_factory=lambda: list(_DEFAULT_BACKFILL_SKIP_DOMAINS))
 
     # --- daemon -------------------------------------------------------------
     model_idle_unload_s: float = 600.0   # unload heavy models after this idle period
@@ -215,6 +238,11 @@ EDITABLE_KEYS: tuple[str, ...] = (
     "git_repo_roots",
     "recent_files_days",
     "log_clipboard",
+    "safari_history_days",
+    "reading_list_max",
+    "backfill_page_content",
+    "backfill_max_pages_per_run",
+    "backfill_skip_domains",
 )
 
 

@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 import plistlib
 import sqlite3
-import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
+from ...tmpcopy import temp_copy
 
 from ...config import Settings
 from .._ingest import ingest_captures
@@ -35,25 +36,23 @@ def _chrome_downloads() -> list[dict]:
         return []
     rows = []
     try:
-        fd, tmp = tempfile.mkstemp(suffix=".chromedl.db")
-        Path(tmp).write_bytes(_CHROME.read_bytes())
+        with temp_copy(_CHROME, suffix=".chromedl.db") as tmp:
+            conn = sqlite3.connect(str(tmp), timeout=2)
+            try:
+                cur = conn.execute(
+                    "SELECT id, target_path, start_time, tab_url FROM downloads ORDER BY start_time DESC LIMIT 500"
+                )
+                for did, path, start, url in cur:
+                    if not path:
+                        continue
+                    when = datetime.fromtimestamp((start or 0) / 1_000_000 - CHROME_OFFSET, timezone.utc).replace(tzinfo=None) if start else datetime.now(timezone.utc).replace(tzinfo=None)
+                    rows.append(_row(when, Path(path).name, url or path, f"chrome:{did}:{path}"))
+            except sqlite3.Error:
+                pass
+            finally:
+                conn.close()
     except OSError:
         return []
-    try:
-        conn = sqlite3.connect(tmp, timeout=2)
-        cur = conn.execute(
-            "SELECT id, target_path, start_time, tab_url FROM downloads ORDER BY start_time DESC LIMIT 500"
-        )
-        for did, path, start, url in cur:
-            if not path:
-                continue
-            when = datetime.fromtimestamp((start or 0) / 1_000_000 - CHROME_OFFSET, timezone.utc).replace(tzinfo=None) if start else datetime.now(timezone.utc).replace(tzinfo=None)
-            rows.append(_row(when, Path(path).name, url or path, f"chrome:{did}:{path}"))
-        conn.close()
-    except sqlite3.Error:
-        pass
-    finally:
-        Path(tmp).unlink(missing_ok=True)
     return rows
 
 
