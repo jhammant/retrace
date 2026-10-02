@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "retrace"
+name = "retrace-cli"
 version = "0.1.0"
 description = "A private, on-device macOS rewind: capture, search, and scrub back through your day. 100% local, no telemetry."
 readme = "README.md"
@@ -41,21 +41,35 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
 ]
+# Better readable-text extraction for the opt-in page-content backfill. Optional:
+# without it, backfill falls back to a stdlib HTML stripper.
+backfill = [
+    "trafilatura>=1.6",
+]
 
 [project.scripts]
 retrace = "retrace.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/retrace-app/retrace"
-Repository = "https://github.com/retrace-app/retrace"
-Issues = "https://github.com/retrace-app/retrace/issues"
+Homepage = "https://github.com/jhammant/retrace"
+Repository = "https://github.com/jhammant/retrace"
+Issues = "https://github.com/jhammant/retrace/issues"
 
 [tool.hatch.build.targets.wheel]
+# retrace/web and retrace/native/swift are subpackages of `retrace`, so their
+# non-Python assets (.js/.html/.css/.swift) ship automatically — no force-include.
 packages = ["retrace"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"retrace/native/swift" = "retrace/native/swift"
-"retrace/web" = "retrace/web"
+[tool.hatch.build.targets.sdist]
+# Keep the sdist lean: ship the package + tests + metadata, not the Remotion
+# demo video (20MB), rendered frames, or screenshot assets.
+include = [
+    "retrace",
+    "tests",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
