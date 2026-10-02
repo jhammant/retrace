@@ -252,7 +252,7 @@ Edit the common ones in the Settings panel. Keys include: `capture_interval_s`,
 `capture_private_browsing`, `block_sensitive_content`, `block_sensitive_images`,
 `sensitive_domains`, `sensitive_keywords`, `capture_page_text`, `capture_page_html`,
 `enable_plugins`, `disabled_plugins`, `auto_optimize`, `compact_after_days`,
-`deep_compact_after_days`, `max_storage_mb`.
+`deep_compact_after_days`, `max_storage_mb`, `thin_schedule`.
 
 ## Storage
 
@@ -264,6 +264,11 @@ once a day the daemon re-encodes older days in place, then never touches them ag
 | `compact` | after 3 days | same 1280 px, JPEG quality 60 | ~45% of original |
 | `deep` | after 14 days | 960 px, JPEG quality 55 | ~25% of original |
 
+To capture often without filling the disk, let frames degrade with age.
+`thin_schedule = "1:60,3:120,14:300"` keeps at most one frame a minute once a day old, one per
+2 minutes after 3 days and one per 5 minutes after 14, always keeping the frame at each
+app/window switch. Thinned frames lose only their image: their text stays searchable.
+
 Text, OCR, captions and embeddings are untouched, so search is unaffected. Set
 `max_storage_mb` for a hard ceiling: the oldest days lose their thumbnails first and keep
 their searchable text. Each daily pass is time-boxed (`optimize_max_seconds`, default 300)
@@ -274,8 +279,8 @@ retrace optimize --dry-run   # what would be saved, changes nothing
 retrace optimize             # run a pass now
 ```
 
-On a month of real use this took 2.1 GB down to about 1.1 GB, which is enough headroom to
-shorten `capture_interval_s` from 45 s to 20 s for roughly the disk use the default had before.
+On a month of real use this projected 2.1 GB down to about 1.1 GB (0.95 GB with the thinning
+schedule above). That headroom is what makes a short `capture_interval_s` (10-20 s) practical.
 
 ---
 

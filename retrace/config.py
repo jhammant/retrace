@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     deep_compact_max_edge: int = 960
     deep_compact_jpeg_quality: int = 55
     max_storage_mb: int = 0              # hard ceiling; oldest thumbnails go first (0 = off)
+    # Thin ageing days: "days:seconds" pairs. "1:60,3:120,14:300" keeps at most one frame a
+    # minute after a day, one per 2 min after 3 days, one per 5 min after 14, plus every
+    # app/window switch. Dropped frames lose only their image; their text stays searchable.
+    thin_schedule: str = ""              # "" = off
     optimize_max_seconds: float = 300.0  # time budget per daily pass; the rest resumes next day
 
     # --- features -----------------------------------------------------------
@@ -191,6 +195,7 @@ EDITABLE_KEYS: tuple[str, ...] = (
     "compact_after_days",
     "deep_compact_after_days",
     "max_storage_mb",
+    "thin_schedule",
     "enable_semantic_search",
     "enable_caption",
     "enable_vlm_caption",

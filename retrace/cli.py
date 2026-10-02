@@ -217,6 +217,10 @@ def cmd_optimize(args: argparse.Namespace) -> int:
     verb = "Would save" if report["dry_run"] else "Saved"
     print(f"Storage: {mb(report['before_bytes'])} -> {mb(report['after_bytes'])}  "
           f"({verb.lower()} {mb(report['saved_bytes'])})")
+    th = report.get("thin") or {}
+    if th.get("days"):
+        print(f"  thin     {th['days']} day(s): {th['frames_dropped']} frame(s) dropped, "
+              f"{mb(th['bytes_freed'])} (schedule {th['schedule']})")
     for name, t in report["tiers"].items():
         if t["days"]:
             print(f"  {name:8} {t['days']} day(s), {t['frames']} frame(s): "

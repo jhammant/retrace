@@ -12,6 +12,11 @@ Text, OCR, captions and embeddings live in the database and are never touched, s
 works exactly as before. A day is recorded in ``optimize_state.json`` only once every frame in
 it has been processed, so an interrupted run simply resumes next time.
 
+``thin_schedule`` (off by default) degrades density with age, e.g. ``"1:60,3:120,14:300"``: after
+a day keep at most one frame a minute, after 3 days one per 2 minutes, after 14 days one per 5,
+always keeping the frame at each app/window switch. That is what makes a short
+``capture_interval_s`` affordable. Thinned frames lose only their image.
+
 ``max_storage_mb`` (off by default) is a hard ceiling: when thumbnails plus database exceed it,
 the oldest days lose their thumbnails first (their text rows stay searchable).
 """
@@ -28,7 +33,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from sqlalchemy import or_, text, update
+from sqlalchemy import or_, select, text, update
 
 from ..config import Settings, get_settings
 from ..db import session_scope
@@ -198,6 +203,69 @@ def _evict_day(s: Settings, day: str, day_dir: Path) -> int:
     return freed
 
 
+def thin_schedule(s: Settings) -> list[tuple[int, int]]:
+    """Parse ``thin_schedule`` into ``[(after_days, min_gap_s), ...]`` sorted by age."""
+    out: list[tuple[int, int]] = []
+    for part in (s.thin_schedule or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        try:
+            days, gap = (int(x) for x in part.split(":"))
+        except ValueError:
+            log.warning("ignoring bad thin_schedule entry %r", part)
+            continue
+        if days > 0 and gap > 0:
+            out.append((days, gap))
+    return sorted(out)
+
+
+def _day_rows(session, day: str):
+    return session.execute(
+        select(Capture.id, Capture.captured_at, Capture.app_name, Capture.window_title, Capture.thumb_path)
+        .where(Capture.thumb_path.is_not(None))
+        .where(or_(Capture.thumb_path.like(f"{day}/%"), Capture.thumb_path.like(f"%/thumbs/{day}/%")))
+        .order_by(Capture.captured_at)
+    ).all()
+
+
+def _thin_day(s: Settings, day: str, gap_s: int, *, dry_run: bool) -> tuple[int, int, set[str]]:
+    """Keep one frame per ``gap_s`` plus every app/window switch.
+
+    Returns (frames dropped, bytes freed, file names dropped).
+    """
+    dropped_ids: list[int] = []
+    dropped_names: set[str] = set()
+    freed = 0
+    with session_scope(s) as session:
+        rows = _day_rows(session, day)
+        last_kept_at = None
+        prev_ctx = None
+        for row in rows:
+            ctx = (row.app_name, row.window_title)
+            switch = ctx != prev_ctx
+            prev_ctx = ctx
+            if last_kept_at is None or switch or (row.captured_at - last_kept_at).total_seconds() >= gap_s:
+                last_kept_at = row.captured_at
+                continue
+            path = Path(row.thumb_path)
+            path = path if path.is_absolute() else s.thumbs_dir / path
+            try:
+                size = path.stat().st_size
+            except FileNotFoundError:
+                size = 0
+            if not dry_run:
+                path.unlink(missing_ok=True)
+            freed += size
+            dropped_ids.append(row.id)
+            dropped_names.add(path.name)
+        if dropped_ids and not dry_run:
+            for i in range(0, len(dropped_ids), 500):
+                session.execute(update(Capture).where(Capture.id.in_(dropped_ids[i:i + 500]))
+                                .values(thumb_path=None))
+    return len(dropped_ids), freed, dropped_names
+
+
 def _maintain_db(s: Settings) -> dict:
     """Merge FTS segments and refresh planner stats; VACUUM only when much space is free."""
     out = {"fts_optimized": False, "vacuumed": False}
@@ -237,6 +305,29 @@ def optimize(settings: Settings | None = None, *, dry_run: bool = False,
         "incomplete": False,
     }
 
+    schedule = thin_schedule(s)
+    thin = {"schedule": s.thin_schedule, "days": 0, "frames_dropped": 0, "bytes_freed": 0}
+    thinned_names: set[str] = set()   # dry run: frames that would already be gone
+    state.setdefault("thin", {})
+    for day, _day_dir in _day_dirs(s):
+        if not schedule or (deadline and time.monotonic() > deadline):
+            break
+        age = (today - day).days
+        due = [gap for after, gap in schedule if age >= after]
+        if not due:
+            continue
+        gap = due[-1]
+        if state["thin"].get(day.isoformat(), 0) >= gap:
+            continue
+        n, freed, names = _thin_day(s, day.isoformat(), gap, dry_run=dry_run)
+        thin["days"] += 1
+        thin["frames_dropped"] += n
+        thin["bytes_freed"] += freed
+        thinned_names |= names
+        if not dry_run:
+            state["thin"][day.isoformat()] = gap
+    report["thin"] = thin
+
     pending: dict[str, list[Path]] = {t.name: [] for t in tiers}
     for day, day_dir in _day_dirs(s):
         age = (today - day).days
@@ -251,7 +342,7 @@ def optimize(settings: Settings | None = None, *, dry_run: bool = False,
         stats = report["tiers"][target.name]
         stats["days"] += 1
         if dry_run:
-            pending[target.name].extend(frames)
+            pending[target.name].extend(f for f in frames if f.name not in thinned_names)
             continue
         finished = True
         for f in frames:
@@ -284,7 +375,8 @@ def optimize(settings: Settings | None = None, *, dry_run: bool = False,
     budget = {"max_storage_mb": s.max_storage_mb, "days_evicted": [], "bytes_freed": 0}
     if s.max_storage_mb > 0:
         limit = s.max_storage_mb * 1024 * 1024
-        projected_saving = sum(v["bytes_before"] - v["bytes_after"] for v in report["tiers"].values())
+        projected_saving = thin["bytes_freed"] + sum(
+            v["bytes_before"] - v["bytes_after"] for v in report["tiers"].values())
         current = storage_usage(s)["total_bytes"] - (projected_saving if dry_run else 0)
         for day, day_dir in _day_dirs(s):
             if current <= limit or (today - day).days < KEEP_RECENT_DAYS:
@@ -295,6 +387,7 @@ def optimize(settings: Settings | None = None, *, dry_run: bool = False,
             current -= size
             if not dry_run:
                 state["days"].pop(day.isoformat(), None)
+                state["thin"].pop(day.isoformat(), None)
     report["budget"] = budget
 
     if not dry_run:
@@ -303,7 +396,7 @@ def optimize(settings: Settings | None = None, *, dry_run: bool = False,
         _save_state(s, state)
         after = storage_usage(s)["total_bytes"]
     else:
-        after = before["total_bytes"] - budget["bytes_freed"] - sum(
+        after = before["total_bytes"] - budget["bytes_freed"] - thin["bytes_freed"] - sum(
             v["bytes_before"] - v["bytes_after"] for v in report["tiers"].values())
     report["after_bytes"] = after
     report["saved_bytes"] = before["total_bytes"] - after

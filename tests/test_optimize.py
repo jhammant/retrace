@@ -156,3 +156,76 @@ def test_cli_parses_optimize():
     args = build_parser().parse_args(["optimize", "--dry-run", "--max-seconds", "30"])
     assert args.dry_run is True
     assert args.max_seconds == 30
+
+
+def _thin_fixture(settings, age_days: int):
+    """A day of frames 10 s apart in one window, with a switch to another window midway."""
+    day = (TODAY - timedelta(days=age_days)).isoformat()
+    d = settings.thumb_dir_for_day(day)
+    start = utcnow() - timedelta(days=age_days)
+    plan = [("Editor", "a.py")] * 12 + [("Browser", "docs")] + [("Editor", "a.py")] * 6
+    with session_scope(settings) as s:
+        for i, (app, win) in enumerate(plan):
+            f = d / f"t{i:02d}.jpg"
+            f.write_bytes(b"x" * 1000)
+            s.add(Capture(captured_at=start + timedelta(seconds=10 * i), app_name=app,
+                          window_title=win, text=f"frame {i}", text_len=7,
+                          thumb_path=f"{day}/{f.name}"))
+    return d, plan
+
+
+def _kept(settings):
+    with session_scope(settings) as s:
+        rows = s.query(Capture).order_by(Capture.captured_at).all()
+        return [r.thumb_path is not None for r in rows], len(rows)
+
+
+def test_thinning_keeps_one_frame_per_gap_and_every_switch(settings):
+    settings.compact_after_days = 0
+    settings.deep_compact_after_days = 0
+    settings.thin_schedule = "1:60"
+    d, plan = _thin_fixture(settings, 3)
+
+    report = optimize(settings, today=TODAY)
+
+    kept, total = _kept(settings)
+    assert total == len(plan)                      # rows stay searchable
+    # kept: frame 0, frame 6 (60 s later), frame 12 (switch to Browser), frame 13 (switch back)
+    assert [i for i, k in enumerate(kept) if k] == [0, 6, 12, 13]
+    assert sorted(p.name for p in d.iterdir()) == ["t00.jpg", "t06.jpg", "t12.jpg", "t13.jpg"]
+    assert report["thin"]["frames_dropped"] == len(plan) - 4
+    assert report["thin"]["bytes_freed"] == (len(plan) - 4) * 1000
+
+
+def test_thinning_escalates_with_age_and_is_idempotent(settings):
+    settings.compact_after_days = 0
+    settings.deep_compact_after_days = 0
+    settings.thin_schedule = "1:30,10:120"
+    _thin_fixture(settings, 3)
+    optimize(settings, today=TODAY)
+    first, _ = _kept(settings)
+    again = optimize(settings, today=TODAY)
+    assert again["thin"]["days"] == 0
+    optimize(settings, today=TODAY + timedelta(days=10))
+    later, _ = _kept(settings)
+    assert sum(later) < sum(first)
+
+
+def test_thinning_leaves_recent_days_and_dry_run_alone(settings):
+    settings.thin_schedule = "1:60"
+    _thin_fixture(settings, 0)
+    optimize(settings, today=TODAY)
+    kept, total = _kept(settings)
+    assert all(kept)
+    settings.thin_schedule = "1:60"
+    report = optimize(settings, dry_run=True, today=TODAY + timedelta(days=2))
+    assert report["thin"]["frames_dropped"] > 0
+    kept, _ = _kept(settings)
+    assert all(kept)
+
+
+def test_bad_thin_schedule_entries_are_ignored(settings):
+    from retrace.capture.optimize import thin_schedule
+
+    settings.thin_schedule = "1:60, junk, 0:30, 14:300"
+    assert thin_schedule(settings) == [(1, 60), (14, 300)]
