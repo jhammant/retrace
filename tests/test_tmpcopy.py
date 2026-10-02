@@ -6,8 +6,8 @@ leaked one descriptor per Chrome-history scan until the daemon hit RLIMIT_NOFILE
 
 from __future__ import annotations
 
-import os
 import sqlite3
+import sys
 from pathlib import Path
 
 import pytest
@@ -16,7 +16,15 @@ from retrace.tmpcopy import temp_copy
 
 
 def _open_fds() -> int:
-    return len(os.listdir("/dev/fd"))
+    """Open descriptors (POSIX) or handles (Windows) for this process."""
+    from retrace.capture.daemon import fd_usage
+
+    return fd_usage()[0]
+
+
+# A Windows handle count also moves with unrelated threads and events; a real leak
+# is one handle per call (hundreds here), so allow a little noise there.
+_NOISE = 8 if sys.platform == "win32" else 0
 
 
 @pytest.fixture()
@@ -47,7 +55,7 @@ def test_temp_copy_does_not_leak_fds(src_db: Path):
         with temp_copy(src_db):
             pass
     after = _open_fds()
-    assert after == before, f"fd count grew {before} -> {after}"
+    assert after - before <= _NOISE, f"fd count grew {before} -> {after}"
 
 
 def test_temp_copy_missing_source_raises_without_leak(tmp_path: Path):
@@ -56,7 +64,7 @@ def test_temp_copy_missing_source_raises_without_leak(tmp_path: Path):
         with pytest.raises(OSError):
             with temp_copy(tmp_path / "nope"):
                 pass
-    assert _open_fds() == before
+    assert _open_fds() - before <= _NOISE
 
 
 def test_read_chrome_does_not_leak_fds(src_db: Path, monkeypatch):
@@ -77,4 +85,4 @@ def test_read_chrome_does_not_leak_fds(src_db: Path, monkeypatch):
     before = _open_fds()
     for _ in range(500):
         service.read_chrome(None)
-    assert _open_fds() == before
+    assert _open_fds() - before <= _NOISE

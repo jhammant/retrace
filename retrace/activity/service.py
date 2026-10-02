@@ -1,5 +1,9 @@
 """Activity ingest: macOS focus history + browser history + active sampling.
 
+On Windows there is no knowledgeC or Safari; Chrome, Edge and Brave history are
+read from their Windows profile folders and per-app time comes from the
+idle-aware active samples.
+
 Reads three on-device SQLite sources read-only (all fail soft if missing/locked/
 forbidden), plus records idle-aware "active" samples from the daemon. An
 incremental cutoff per source avoids re-reading old rows.
@@ -8,6 +12,7 @@ Sources:
 - knowledgeC.db  ``/app/inFocus`` stream  -> per-app focus intervals
 - Safari History.db                        -> per-URL visits
 - Chrome History (copied first; Chrome locks it) -> per-URL visits
+- Edge / Brave History (Windows)                -> per-URL visits
 """
 
 from __future__ import annotations
@@ -21,6 +26,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
+from ..browsers import chrome_history, extra_chromium_histories
 from ..config import Settings, get_settings
 from ..db import session_scope
 from ..models import ActivityEvent, utcnow
@@ -36,7 +42,9 @@ CHROME_OFFSET = 11644473600
 
 _KNOWLEDGEC = Path.home() / "Library" / "Application Support" / "Knowledge" / "knowledgeC.db"
 _SAFARI = Path.home() / "Library" / "Safari" / "History.db"
-_CHROME = Path.home() / "Library" / "Application Support" / "Google" / "Chrome" / "Default" / "History"
+_CHROME_APP, _CHROME = chrome_history()
+# Chromium browsers besides Chrome, as (source, app id, History path).
+_EXTRA_CHROMIUM = extra_chromium_histories()
 
 
 def _state_path(s: Settings) -> Path:
@@ -150,14 +158,19 @@ def read_safari(cutoff: datetime | None) -> list[dict]:
 
 
 def read_chrome(cutoff: datetime | None) -> list[dict]:
-    if not _CHROME.exists():
+    return read_chromium(cutoff, _CHROME, "chrome", _CHROME_APP)
+
+
+def read_chromium(cutoff: datetime | None, path: Path, source: str, app: str) -> list[dict]:
+    """Visits from any Chromium-family History database."""
+    if not path.exists():
         return []
     cutoff_chrome = ((cutoff.replace(tzinfo=timezone.utc).timestamp() + CHROME_OFFSET) * 1_000_000) if cutoff else 0
     rows: list[dict] = []
     # Chrome locks its live DB; copy to a temp file first. temp_copy owns and
     # closes the descriptor -- the old inline mkstemp leaked one fd per scan.
     try:
-        with temp_copy(_CHROME, suffix=".chrome.db") as tmp:
+        with temp_copy(path, suffix=f".{source}.db") as tmp:
             conn = sqlite3.connect(str(tmp), timeout=2)
             try:
                 cur = conn.execute(
@@ -174,16 +187,16 @@ def read_chrome(cutoff: datetime | None) -> list[dict]:
                         continue
                     start = _utc_from_ts(vtime / 1_000_000 - CHROME_OFFSET)
                     rows.append({
-                        "source": "chrome", "app": "com.google.Chrome", "url": url, "title": title,
+                        "source": source, "app": app, "url": url, "title": title,
                         "start_at": start, "end_at": None, "seconds": 0.0,
                         "day": _local_day(start), "detail": None,
                     })
             except sqlite3.Error as exc:
-                log.warning("Chrome read failed: %s", exc)
+                log.warning("%s history read failed: %s", source, exc)
             finally:
                 conn.close()
     except OSError as exc:
-        log.info("Chrome history copy failed (%s)", exc)
+        log.info("%s history copy failed (%s)", source, exc)
         return []
     return rows
 
@@ -229,6 +242,8 @@ def scan_and_upsert(full: bool = False, settings: Settings | None = None) -> dic
         "safari": read_safari,
         "chrome": read_chrome,
     }
+    for src, app, path in _EXTRA_CHROMIUM:
+        readers[src] = lambda c, _p=path, _s=src, _a=app: read_chromium(c, _p, _s, _a)
     counts: dict[str, int] = {}
     new_cutoffs = dict(state.get("cutoffs", {}))
     total_upserted = 0
@@ -290,5 +305,6 @@ def activity_status(settings: Settings | None = None) -> dict:
             "knowledgec": _KNOWLEDGEC.exists(),
             "safari": _SAFARI.exists(),
             "chrome": _CHROME.exists(),
+            **{src: path.exists() for src, _app, path in _EXTRA_CHROMIUM},
         },
     }

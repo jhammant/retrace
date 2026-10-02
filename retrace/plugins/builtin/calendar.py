@@ -16,6 +16,7 @@ BUNDLE = "com.apple.iCal"
 class CalendarPlugin(RetracePlugin):
     name = "calendar"
     description = "Ingest calendar events (EventKit) into the timeline."
+    platforms = ("darwin",)
 
     def collect(self, settings: Settings) -> dict:
         res = get_helper("retrace-calendar", settings).run(["30"], timeout=30.0)

@@ -50,6 +50,7 @@ def _now_playing() -> dict | None:
 class AppleMusicPlugin(RetracePlugin):
     name = "apple-music"
     description = "Log Apple Music tracks you play (including in the background)."
+    platforms = ("darwin",)
 
     def __init__(self) -> None:
         self._last_track_id: str | None = None

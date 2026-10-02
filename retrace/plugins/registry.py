@@ -65,7 +65,7 @@ def load_plugins(settings: Settings | None = None) -> list[RetracePlugin]:
     if not s.enable_plugins:
         return []
     disabled = set(s.disabled_plugins)
-    return [p for p in (_builtin() + _user(s)) if p.name not in disabled]
+    return [p for p in (_builtin() + _user(s)) if p.name not in disabled and p.supported()]
 
 
 def enrichers_for(bundle_id: str | None, settings: Settings | None = None) -> list[RetracePlugin]:

@@ -12,6 +12,7 @@ import logging
 
 from ..config import Settings, get_settings
 from ..native.helpers import get_helper
+from ..platform import IS_MACOS
 
 log = logging.getLogger("retrace.caption")
 
@@ -27,6 +28,8 @@ def native_caption(
     settings: Settings | None = None,
 ) -> str | None:
     """Ask the on-device LLM for a 1-2 sentence caption. ``None`` if unavailable."""
+    if not IS_MACOS:  # Foundation Models is Apple-only; callers use the template
+        return None
     s = settings or get_settings()
     helper = get_helper("retrace-caption", s)
     if not helper.source_exists():

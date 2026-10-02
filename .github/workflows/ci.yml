@@ -7,7 +7,11 @@ on:
 
 jobs:
   test:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -21,6 +25,46 @@ jobs:
         run: uv pip install -e ".[dev]"
 
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q -rs -m "not windows_live"
         # The suite is hermetic: it uses a throwaway RETRACE_HOME and stubs the
-        # native Swift/Foundation-Models helpers, so it needs no Xcode toolchain.
+        # native helpers, so it needs no Xcode toolchain and no desktop.
+
+      # --- Windows: drive a real desktop end to end -----------------------------
+      - name: Windows OCR language (en-US)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $name = "Language.OCR~~~en-US~0.0.1.0"
+          $cap = Get-WindowsCapability -Online -Name $name
+          "OCR capability: $($cap.State)"
+          if ($cap.State -ne "Installed") { Add-WindowsCapability -Online -Name $name | Out-Null }
+          (Get-WindowsCapability -Online -Name $name).State
+
+      - name: Live Windows tests (screen, OCR, watcher, tray, server + daemon)
+        if: runner.os == 'Windows'
+        run: uv run pytest -v -s -m windows_live
+        env:
+          RETRACE_LIVE_TESTS: "1"
+
+      - name: CLI smoke (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RETRACE_HOME: ${{ runner.temp }}\retrace-smoke
+        run: |
+          uv run retrace init
+          uv run retrace doctor
+          uv run retrace tick --force
+          uv run retrace plugins
+          uv run retrace collect
+
+      - name: Desktop screenshot (debug)
+        if: always() && runner.os == 'Windows'
+        run: uv run python -c "from PIL import ImageGrab; ImageGrab.grab().save('desktop.png')"
+
+      - uses: actions/upload-artifact@v4
+        if: always() && runner.os == 'Windows'
+        with:
+          name: windows-desktop
+          path: desktop.png
+          if-no-files-found: ignore

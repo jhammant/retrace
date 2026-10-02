@@ -489,6 +489,8 @@ async function renderSettings() {
   let cfg = {}, perms = {}, status = {};
   try { [cfg, perms, status] = await Promise.all([api("/config"), api("/permissions"), api("/capture/status")]); } catch {}
   const c = cfg.config || {};
+  // Settings that only exist on macOS stay visible but say so elsewhere.
+  const macOnly = cfg.platform && cfg.platform !== "macos" ? ' <span class="chip" style="margin-left:6px">macOS only</span>' : "";
 
   body.innerHTML = `
     <div class="set-grid">
@@ -528,7 +530,7 @@ async function renderSettings() {
           <label class="toggle"><input type="checkbox" id="t-sens" ${c.block_sensitive_content !== false ? "checked" : ""}/><span class="track"></span></label>
         </div>
         <div class="set-row" style="background:transparent;border:0;padding:8px 0">
-          <div><div class="label">On-device image analysis</div><div class="desc">Scan each frame with Apple's Sensitive Content Analysis; drop anything flagged. Requires "Sensitive Content Warning" enabled in System Settings.</div></div>
+          <div><div class="label">On-device image analysis${macOnly}</div><div class="desc">Scan each frame with Apple's Sensitive Content Analysis; drop anything flagged. Requires "Sensitive Content Warning" enabled in System Settings.</div></div>
           <label class="toggle"><input type="checkbox" id="t-sensimg" ${c.block_sensitive_images !== false ? "checked" : ""}/><span class="track"></span></label>
         </div>
         <div class="desc" style="margin-top:6px">Blocked keywords (matched on URL / title)</div>
@@ -552,11 +554,11 @@ async function renderSettings() {
       <div class="panel">
         <h3>Full page capture <span class="chip" style="margin-left:8px">browsers</span></h3>
         <div class="set-row" style="background:transparent;border:0;padding:8px 0">
-          <div><div class="label">Capture full page text</div><div class="desc">Store the whole page's text (incl. off-screen) for richer search — not just what's visible. Needs "Allow JavaScript from Apple Events" in your browser.</div></div>
+          <div><div class="label">Capture full page text${macOnly}</div><div class="desc">Store the whole page's text (incl. off-screen) for richer search — not just what's visible. Needs "Allow JavaScript from Apple Events" in your browser.</div></div>
           <label class="toggle"><input type="checkbox" id="t-pagetext" ${c.capture_page_text ? "checked" : ""}/><span class="track"></span></label>
         </div>
         <div class="set-row" style="background:transparent;border:0;padding:8px 0">
-          <div><div class="label">Also store raw HTML</div><div class="desc">Keep the page's HTML source (stored compressed, never shown in the timeline — available via "view source" on a capture).</div></div>
+          <div><div class="label">Also store raw HTML${macOnly}</div><div class="desc">Keep the page's HTML source (stored compressed, never shown in the timeline — available via "view source" on a capture).</div></div>
           <label class="toggle"><input type="checkbox" id="t-pagehtml" ${c.capture_page_html ? "checked" : ""}/><span class="track"></span></label>
         </div>
       </div>

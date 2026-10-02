@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from ..config import Settings, get_settings
+from ..platform import IS_WINDOWS
 
 log = logging.getLogger("retrace.native")
 
@@ -170,9 +171,16 @@ def get_helper(name: str, settings: Settings | None = None) -> SwiftHelper:
 
 
 def build_all(settings: Settings | None = None, *, force: bool = False) -> dict[str, str]:
-    """Compile every helper whose source exists. Returns name -> status."""
+    """Compile every helper whose source exists. Returns name -> status.
+
+    On Windows nothing is compiled; this reports the Python backends instead.
+    """
     s = settings or get_settings()
     s.ensure_dirs()
+    if IS_WINDOWS:
+        from .win import backend_status
+
+        return backend_status()
     results: dict[str, str] = {}
     for name in KNOWN_HELPERS:
         helper = SwiftHelper(name, s)
@@ -188,6 +196,8 @@ def build_all(settings: Settings | None = None, *, force: bool = False) -> dict[
 
 
 # --- typed convenience wrappers -------------------------------------------
+# Each returns the helper's JSON as a dict (or None). On Windows the same shapes
+# come from the Python backends in ``retrace.native.win``.
 
 
 def capture_frame(
@@ -209,6 +219,10 @@ def capture_frame(
         "exclude_bundle_ids": exclude_bundle_ids,
         "display": display,
     }
+    if IS_WINDOWS:
+        from .win.capture import capture_frame as win_capture
+
+        return win_capture(**cfg)
     return get_helper("retrace-capture", settings).run([json.dumps(cfg)], timeout=timeout)
 
 
@@ -231,22 +245,36 @@ def read_context(
         "fetch_page_text": fetch_page_text,
         "fetch_page_html": fetch_page_html,
     }
+    if IS_WINDOWS:
+        from .win.context import read_context as win_context
+
+        return win_context(**cfg)
     return get_helper("retrace-context", settings).run([json.dumps(cfg)], timeout=timeout)
 
 
 def analyze_sensitivity(
     path: str, *, settings: Settings | None = None, timeout: float = 12.0
 ) -> dict[str, Any] | None:
+    if IS_WINDOWS:  # no on-device image classifier; the domain/keyword layer still runs
+        return {"ok": True, "available": False, "sensitive": False, "reason": "not available on Windows"}
     return get_helper("retrace-sensitivity", settings).run([path], timeout=timeout)
 
 
 def ocr_image(path: str, *, settings: Settings | None = None, timeout: float = 30.0) -> dict[str, Any] | None:
+    if IS_WINDOWS:
+        from .win.ocr import ocr_image as win_ocr
+
+        return win_ocr(path)
     return get_helper("retrace-ocr", settings).run([path], timeout=timeout)
 
 
 def get_presence(
     threshold_s: float = 120.0, *, settings: Settings | None = None, timeout: float = 5.0
 ) -> dict[str, Any] | None:
+    if IS_WINDOWS:
+        from .win.presence import get_presence as win_presence
+
+        return win_presence(threshold_s)
     return get_helper("retrace-present", settings).run([str(threshold_s)], timeout=timeout)
 
 
@@ -255,6 +283,10 @@ def embed_text(
 ) -> dict[str, Any] | None:
     if not text:
         return None
+    if IS_WINDOWS:
+        from ..search.hashembed import embed
+
+        return embed(text[:max_chars])
     return get_helper("retrace-embed", settings).run([text[:max_chars]], timeout=timeout)
 
 

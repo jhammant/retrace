@@ -47,6 +47,17 @@ _DEFAULT_DENYLIST_BUNDLE_IDS: list[str] = [
     "com.apple.keychainaccess",
     "com.apple.Passwords",              # macOS Passwords app
     "com.nordvpn.macos",                # VPN/credential surfaces
+    # Windows app ids are executable names.
+    "1password.exe",
+    "bitwarden.exe",
+    "keepass.exe",
+    "keepassxc.exe",
+    "dashlane.exe",
+    "enpass.exe",
+    "keeperpasswordmanager.exe",
+    "nordpass.exe",
+    "proton pass.exe",
+    "credentialuibroker.exe",           # Windows credential prompts
 ]
 
 
@@ -135,7 +146,7 @@ class Settings(BaseSettings):
     # --- plugins ------------------------------------------------------------
     enable_plugins: bool = True
     disabled_plugins: list[str] = Field(default_factory=list)  # plugin names to skip
-    git_repo_roots: list[str] = Field(default_factory=lambda: ["~/dev", "~/Developer", "~/Projects", "~/code"])
+    git_repo_roots: list[str] = Field(default_factory=lambda: ["~/dev", "~/Developer", "~/Projects", "~/code", "~/source/repos"])
     recent_files_days: int = 7
     log_clipboard: bool = False  # opt-in: clipboard history can contain sensitive text (passwords)
 
@@ -278,7 +289,7 @@ def update_config(updates: dict[str, object]) -> Settings:
     # settings from the web panel can't silently reset them.
     current: dict[str, object] = {}
     try:
-        current = tomllib.loads(s.config_path.read_text())
+        current = tomllib.loads(s.config_path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError):
         pass
     current.update({k: getattr(s, k) for k in EDITABLE_KEYS})

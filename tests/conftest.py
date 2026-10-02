@@ -74,3 +74,15 @@ def _neutralize_native(monkeypatch):
     """
     monkeypatch.setattr("retrace.capture.caption_native.native_caption", lambda **k: None)
     monkeypatch.setattr("retrace.search.service._embed_helper", lambda *a, **k: None)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_machine_data(monkeypatch, tmp_path):
+    """Never read this machine's own browser or notification databases in tests.
+
+    On Windows the Edge/Brave histories and the notification database live at
+    fixed per-user paths that a test runner may well have.
+    """
+    monkeypatch.setattr("retrace.activity.service._EXTRA_CHROMIUM", [])
+    monkeypatch.setattr("retrace.plugins.builtin.downloads._EXTRA_CHROMIUM", [])
+    monkeypatch.setattr("retrace.plugins.builtin.notifications.WPN_DB", tmp_path / "no-wpndatabase.db")
