@@ -290,3 +290,88 @@ def test_server_and_daemon_over_http(word_window, tmp_path):
         server.wait(timeout=20)
         log.close()
         print((tmp_path / "server.log").read_text(encoding="utf-8")[-3000:])
+
+
+# --- real browsers: address bar + private-window detection --------------------------
+
+_BROWSERS = {
+    "msedge.exe": ([r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"], "--inprivate"),
+    "chrome.exe": ([r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+                    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"], "--incognito"),
+}
+
+
+def _browser_windows(app_id: str) -> list:
+    from retrace.native.win import _win32 as w
+    from retrace.native.win.apps import window_owner
+
+    return [h for h in w.enum_windows()
+            if w.IsWindowVisible(h) and w.window_text(h) and window_owner(h).app_id == app_id]
+
+
+def _wait_new_window(app_id: str, known: set, timeout: float = 45.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        fresh = [h for h in _browser_windows(app_id) if h not in known]
+        if fresh:
+            return fresh[0]
+        time.sleep(0.5)
+    return None
+
+
+def _wait_url(hwnd, timeout: float = 30.0):
+    from retrace.native.win.uia import browser_snapshot
+
+    deadline = time.time() + timeout
+    snap = {}
+    while time.time() < deadline:
+        snap = browser_snapshot(hwnd)
+        if snap.get("url") and "example." in snap["url"]:
+            break
+        time.sleep(1.0)
+    return snap
+
+
+@pytest.mark.parametrize("app_id", list(_BROWSERS))
+def test_browser_url_and_private_window(app_id, tmp_path):
+    import psutil
+
+    from retrace.native.win import _win32 as w
+    from retrace.native.win.browser import title_says_private
+
+    paths, private_flag = _BROWSERS[app_id]
+    exe = next((p for p in paths if os.path.exists(p)), None)
+    if exe is None:
+        pytest.skip(f"{app_id} not installed")
+    common = [f"--user-data-dir={tmp_path / 'profile'}", "--no-first-run",
+              "--no-default-browser-check", "--disable-sync"]
+    known = set(_browser_windows(app_id))
+    launched = [subprocess.Popen([exe, *common, "--new-window", "https://example.com/"])]
+    try:
+        normal = _wait_new_window(app_id, known)
+        assert normal, "browser window never appeared"
+        snap = _wait_url(normal)
+        title = w.window_text(normal)
+        print(app_id, "normal:", {"title": title, **snap})
+        assert snap["url"] and snap["url"].startswith("https://example.com")
+        assert not title_says_private(app_id, title)
+        assert not title_says_private(app_id, snap["accessible_title"])
+
+        known.add(normal)
+        launched.append(subprocess.Popen([exe, *common, private_flag, "https://example.org/"]))
+        private = _wait_new_window(app_id, known)
+        assert private, "private window never appeared"
+        psnap = _wait_url(private)
+        ptitle = w.window_text(private)
+        print(app_id, "private:", {"title": ptitle, **psnap})
+        assert title_says_private(app_id, ptitle) or title_says_private(app_id, psnap["accessible_title"])
+    finally:
+        for proc in launched:
+            try:
+                parent = psutil.Process(proc.pid)
+                for child in parent.children(recursive=True):
+                    child.kill()
+                parent.kill()
+            except psutil.NoSuchProcess:
+                pass
