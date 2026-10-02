@@ -21,7 +21,10 @@ def _builtin() -> list[RetracePlugin]:
     from .builtin.git_activity import GitActivityPlugin
     from .builtin.mail import MailPlugin
     from .builtin.notifications import NotificationsPlugin
+    from .builtin.page_backfill import PageBackfillPlugin
+    from .builtin.reading_list import ReadingListPlugin
     from .builtin.recent_files import RecentFilesPlugin
+    from .builtin.safari_history import SafariHistoryPlugin
     from .builtin.spotify import SpotifyPlugin
     from .builtin.system_stats import SystemStatsPlugin
 
@@ -29,6 +32,9 @@ def _builtin() -> list[RetracePlugin]:
         ClaudeCodePlugin(), SpotifyPlugin(), AppleMusicPlugin(), SystemStatsPlugin(),
         CalendarPlugin(), NotificationsPlugin(), GitActivityPlugin(), ClipboardPlugin(),
         MailPlugin(), DownloadsPlugin(), RecentFilesPlugin(),
+        # Safari history must collect before page-backfill so its rows are candidates
+        # in the same pass. ReadingList is independent (on-device content).
+        SafariHistoryPlugin(), ReadingListPlugin(), PageBackfillPlugin(),
     ]
 
 

@@ -66,19 +66,19 @@ These are hard invariants, enforced in code and covered by tests — not prefere
 
 **Now** — the latest capture with an on-device caption, the now-playing track, and live CPU/memory:
 
-![Now](docs/screenshots/now.png)
+![Now](https://raw.githubusercontent.com/jhammant/retrace/main/docs/screenshots/now.png)
 
 **Stats** — time-by-app, weekly activity, and a CPU/memory chart (hand-rolled offline SVG):
 
-![Stats](docs/screenshots/stats.png)
+![Stats](https://raw.githubusercontent.com/jhammant/retrace/main/docs/screenshots/stats.png)
 
 **Timeline** — every captured moment, searchable, with expandable full text:
 
-![Timeline](docs/screenshots/timeline.png)
+![Timeline](https://raw.githubusercontent.com/jhammant/retrace/main/docs/screenshots/timeline.png)
 
 **Search** — one box, three modes (text · semantic · hybrid), with highlighted matches:
 
-![Search](docs/screenshots/search.png)
+![Search](https://raw.githubusercontent.com/jhammant/retrace/main/docs/screenshots/search.png)
 
 > Screenshots use demo data. A short demo video lives in [`demo/`](demo) (Remotion).
 
@@ -179,7 +179,8 @@ app is frontmost), **collect** an app's own data on a schedule, and/or **poll** 
 lightweight periodic sampling (every ~capture interval). Built-ins cover Claude Code
 transcripts, Spotify + Apple Music now-playing, system CPU/memory, calendar (EventKit),
 macOS notifications, git commits across your repos, Apple Mail subjects, browser
-downloads, recently-opened files, clipboard, and shell history — all on-device.
+downloads, recently-opened files, clipboard, shell history, **Safari history (incl.
+iPhone visits via iCloud)** and **Safari Reading List** — all on-device.
 
 ```python
 # ~/.retrace/plugins/my_app.py
@@ -203,6 +204,28 @@ Run collectors with `uv run retrace collect` (also runs daily in the daemon, and
 the Settings → "Collect app history" button). The built-in **Claude Code** plugin
 ingests `~/.claude/projects/*.jsonl` session transcripts into your timeline, fully
 searchable.
+
+### iPhone & Safari browsing
+
+iOS forbids third-party background screen capture, so there's no iPhone agent — but
+your phone's browsing still reaches Retrace **on-device**, three ways:
+
+| Plugin | Source | Network | Gets |
+|---|---|---|---|
+| `safari-history` | `~/Library/Safari/History.db` (iPhone visits land here via iCloud Safari sync) | none | URLs, titles, timestamps |
+| `reading-list` | `Bookmarks.plist` + offline `ReadingListArchives/*.webarchive` | none | saved articles **with full text** |
+| `page-backfill` | re-fetches eligible history URLs | **outbound** | full page text for public pages |
+
+`page-backfill` is the **only** feature in Retrace that makes outbound requests, so it
+is **off by default** (`backfill_page_content`). When enabled it re-fetches history URLs
+to capture their text, under strict guardrails: https + GET only; loopback/LAN hosts
+blocked; authenticated/personal domains skipped (a cookie-less fetch only hits a login
+wall); action/token-shaped URLs skipped so it never re-triggers a logout/unsubscribe/
+magic link; the same sensitive-content gate as live capture; login-wall and empty
+responses discarded; bounded per run; and every URL is attempted at most once. Install
+the better extractor with `pip install 'retrace-cli[backfill]'` (else a stdlib stripper
+is used). Pushing page *content* from the phone in real time instead needs a Safari Web
+Extension over Tailscale — see the roadmap.
 
 ---
 
