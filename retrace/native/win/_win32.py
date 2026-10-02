@@ -65,6 +65,8 @@ IsWindowVisible = _proto(user32.IsWindowVisible, BOOL, HWND)
 IsIconic = _proto(user32.IsIconic, BOOL, HWND)
 EnumWindows = _proto(user32.EnumWindows, BOOL, WNDENUMPROC, LPARAM)
 EnumChildWindows = _proto(user32.EnumChildWindows, BOOL, HWND, WNDENUMPROC, LPARAM)
+GetAncestor = _proto(user32.GetAncestor, HWND, HWND, wintypes.UINT)
+GA_ROOTOWNER = 3
 GetWindowRect = _proto(user32.GetWindowRect, BOOL, HWND, ctypes.POINTER(RECT))
 DwmGetWindowAttribute = _proto(dwmapi.DwmGetWindowAttribute, ctypes.c_long,
                                HWND, DWORD, ctypes.c_void_p, DWORD)

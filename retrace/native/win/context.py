@@ -28,6 +28,11 @@ def read_context(*, fetch_url: bool = True, **_ignored) -> dict:
                 "text_source": "none", "ax_trusted": True, "private_browsing": False}
 
     owner = window_owner(hwnd)
+    if is_browser(owner.app_id):
+        # A focused popup (translate bubble, permission prompt) belongs to a browser
+        # window; judge that window, not the popup, or a private window behind it
+        # would be captured.
+        hwnd = w.GetAncestor(hwnd, w.GA_ROOTOWNER) or hwnd
     title = w.window_text(hwnd) or None
     url = None
     private = title_says_private(owner.app_id, title)
@@ -37,8 +42,8 @@ def read_context(*, fetch_url: bool = True, **_ignored) -> dict:
 
         snap = browser_snapshot(hwnd)
         url = snap.get("url") if fetch_url else None
-        # Chromium only marks incognito in the accessible name, not the HWND title.
-        private = private or title_says_private(owner.app_id, snap.get("accessible_title"))
+        # Chrome marks incognito only on the toolbar's profile button.
+        private = bool(snap.get("private")) or title_says_private(owner.app_id, snap.get("accessible_title"))
 
     return {
         "ok": True,

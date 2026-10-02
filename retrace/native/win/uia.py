@@ -1,4 +1,5 @@
-"""UI Automation reads for browsers: the address-bar URL and the accessible title.
+"""UI Automation reads for browsers: the address-bar URL, accessible title and
+whether the window is private.
 
 Uses ``comtypes`` against ``UIAutomationCore.dll``. Each calling thread gets its
 own MTA-initialised client, and UIA's own connection/transaction timeouts are
@@ -14,7 +15,9 @@ import threading
 log = logging.getLogger("retrace.native.win.uia")
 
 _UIA_ControlTypePropertyId = 30003
+_UIA_ButtonControlTypeId = 50000
 _UIA_EditControlTypeId = 50004
+_UIA_ToolBarControlTypeId = 50021
 _UIA_ValueValuePropertyId = 30045
 _TreeScope_Descendants = 4
 
@@ -59,14 +62,45 @@ def available() -> bool:
     return _client() is not None
 
 
+def _toolbar_of(uia, element, max_levels: int = 6):
+    """The toolbar holding ``element`` (the address bar), or a near ancestor."""
+    walker = uia.ControlViewWalker
+    node, fallback = element, None
+    for level in range(max_levels):
+        node = walker.GetParentElement(node)
+        if not node:
+            break
+        if level == 1:
+            fallback = node
+        if node.CurrentControlType == _UIA_ToolBarControlTypeId:
+            return node
+    return fallback
+
+
+def _button_names(uia, container, limit: int = 60) -> list[str]:
+    cond = uia.CreatePropertyCondition(_UIA_ControlTypePropertyId, _UIA_ButtonControlTypeId)
+    found = container.FindAll(_TreeScope_Descendants, cond)
+    names = []
+    for i in range(min(found.Length, limit)):
+        try:
+            names.append(found.GetElement(i).CurrentName or "")
+        except Exception:
+            continue
+    return names
+
+
 def browser_snapshot(hwnd) -> dict:
-    """``{"url": str|None, "accessible_title": str|None}`` for a browser window."""
-    out: dict = {"url": None, "accessible_title": None}
+    """``{"url", "accessible_title", "private"}`` for a top-level browser window.
+
+    ``private`` is True when the toolbar's profile button says Incognito/InPrivate/
+    Private. Only the toolbar is searched, never the page, so this stays cheap.
+    """
+    out: dict = {"url": None, "accessible_title": None, "private": False}
     client = _client()
     if client is None:
         return out
     uia, _mod = client
-    from .browser import normalize_address
+    from .browser import button_says_private, normalize_address
 
     try:
         root = uia.ElementFromHandle(hwnd)
@@ -82,6 +116,9 @@ def browser_snapshot(hwnd) -> dict:
         edit = root.FindFirst(_TreeScope_Descendants, cond)
         if edit:
             out["url"] = normalize_address(edit.GetCurrentPropertyValue(_UIA_ValueValuePropertyId))
+            toolbar = _toolbar_of(uia, edit)
+            if toolbar:
+                out["private"] = button_says_private(_button_names(uia, toolbar))
     except Exception:
-        log.debug("address bar read failed", exc_info=True)
+        log.debug("browser toolbar read failed", exc_info=True)
     return out

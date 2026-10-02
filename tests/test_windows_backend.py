@@ -50,6 +50,16 @@ def test_private_window_titles(app, title, expected):
     assert title_says_private(app, title) is expected
 
 
+def test_private_profile_button():
+    from retrace.native.win.browser import button_says_private
+
+    assert button_says_private(["Back", "Reload", "Incognito", "Chrome"])
+    assert button_says_private(["Incognito (2)"])
+    assert button_says_private(["InPrivate"]) and button_says_private(["Private"])
+    assert not button_says_private(["Back", "Profile 1", "Extensions", "You", None])
+    assert not button_says_private(["Privacy Badger"])
+
+
 def test_is_browser_is_case_insensitive():
     assert is_browser("MSEdge.exe") and is_browser("firefox.exe")
     assert not is_browser("code.exe") and not is_browser(None)

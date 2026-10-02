@@ -17,14 +17,24 @@ BROWSER_APP_IDS: frozenset[str] = frozenset({
     "waterfox.exe", "zen.exe", "floorp.exe",
 })
 
-# What each browser appends to a private window's title, e.g.
-#   "Page - [InPrivate] - Microsoft Edge", "Page — Mozilla Firefox Private Browsing",
-#   "Page - Google Chrome (Incognito)", "Page - Brave (Private)".
+# What some browsers put in a private window's title, e.g.
+#   "Page - [InPrivate] - Microsoft Edge", "Page — Mozilla Firefox Private Browsing".
+# Chrome's incognito title is unmarked ("Page - Google Chrome"); see _PRIVATE_BUTTON.
 # Matching errs towards skipping: a false positive only drops one capture.
 _PRIVATE_TITLE = re.compile(
     r"inprivate|incognito|private browsing|\(private\)|\[private\]|- private -",
     re.IGNORECASE,
 )
+
+
+# The toolbar's profile button in a private window: Chrome "Incognito" / "Incognito (2)",
+# Edge "InPrivate", Brave "Private". Chrome marks incognito nowhere else.
+_PRIVATE_BUTTON = re.compile(r"^\s*(incognito|inprivate|private)\b", re.IGNORECASE)
+
+
+def button_says_private(names) -> bool:
+    """True when a browser toolbar button is the private-profile indicator."""
+    return any(_PRIVATE_BUTTON.match(n or "") for n in names)
 
 
 def is_browser(app_id: str | None) -> bool:

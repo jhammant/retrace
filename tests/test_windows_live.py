@@ -306,8 +306,10 @@ def _browser_windows(app_id: str) -> list:
     from retrace.native.win import _win32 as w
     from retrace.native.win.apps import window_owner
 
+    # Main windows only: popups such as the translate bubble are separate windows too.
     return [h for h in w.enum_windows()
-            if w.IsWindowVisible(h) and w.window_text(h) and window_owner(h).app_id == app_id]
+            if w.IsWindowVisible(h) and w.window_text(h).endswith(("Edge", "Chrome"))
+            and window_owner(h).app_id == app_id]
 
 
 def _wait_new_window(app_id: str, known: set, timeout: float = 45.0):
@@ -318,6 +320,18 @@ def _wait_new_window(app_id: str, known: set, timeout: float = 45.0):
             return fresh[0]
         time.sleep(0.5)
     return None
+
+
+def _toolbar_buttons(hwnd) -> list[str]:
+    """Debug aid: the toolbar button names the private check looks at."""
+    from retrace.native.win import uia
+
+    client = uia._client()
+    root = client[0].ElementFromHandle(hwnd)
+    cond = client[0].CreatePropertyCondition(uia._UIA_ControlTypePropertyId, uia._UIA_EditControlTypeId)
+    edit = root.FindFirst(uia._TreeScope_Descendants, cond)
+    toolbar = uia._toolbar_of(client[0], edit) if edit else None
+    return uia._button_names(client[0], toolbar) if toolbar else []
 
 
 def _wait_url(hwnd, timeout: float = 30.0):
@@ -353,7 +367,7 @@ def test_browser_url_and_private_window(app_id, tmp_path):
         assert normal, "browser window never appeared"
         snap = _wait_url(normal)
         title = w.window_text(normal)
-        print(app_id, "normal:", {"title": title, **snap})
+        print(app_id, "normal:", {"title": title, **snap}, "buttons:", _toolbar_buttons(normal))
         assert snap["url"] and snap["url"].startswith("https://example.com")
         assert not title_says_private(app_id, title)
         assert not title_says_private(app_id, snap["accessible_title"])
@@ -364,8 +378,9 @@ def test_browser_url_and_private_window(app_id, tmp_path):
         assert private, "private window never appeared"
         psnap = _wait_url(private)
         ptitle = w.window_text(private)
-        print(app_id, "private:", {"title": ptitle, **psnap})
-        assert title_says_private(app_id, ptitle) or title_says_private(app_id, psnap["accessible_title"])
+        print(app_id, "private:", {"title": ptitle, **psnap}, "buttons:", _toolbar_buttons(private))
+        assert snap["private"] is False
+        assert psnap["private"] or title_says_private(app_id, ptitle)
     finally:
         for proc in launched:
             try:
