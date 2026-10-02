@@ -195,7 +195,7 @@ both systems. Each macOS helper has a Windows counterpart in `retrace/native/win
 |---|---|
 | ScreenCaptureKit frame | primary display via GDI; **denylisted apps' windows are painted black** before the frame or thumbnail is written |
 | Accessibility text | Windows OCR on every frame (UI Automation text is not read) |
-| browser URL + incognito (AppleScript) | address bar via UI Automation; private windows recognised from the window title and accessible name |
+| browser URL + incognito (AppleScript) | address bar via UI Automation; private windows recognised from the window title and the toolbar's profile button |
 | idle / lock / display sleep | idle time + session lock (display sleep is covered by the idle gate) |
 | app-switch events (NSWorkspace) | foreground-window events (SetWinEventHook) |
 | NaturalLanguage embeddings | hashed word + trigram vectors: lexical, so "semantic" search finds typos and word forms, not synonyms |
@@ -213,11 +213,12 @@ Windows sources; activity ingest reads Chrome, Edge and Brave history.
 
 Privacy notes specific to Windows:
 
-- Private-window detection relies on the browser marking the window ("InPrivate",
-  "Incognito", "Private Browsing"). Edge, Firefox and Brave do this in the title; Chrome
-  does it in the accessible name, which Retrace reads via UI Automation. Leave
-  `capture_private_browsing` off (the default), and check it with your own browser
-  before relying on it.
+- Private windows are recognised from the browser's own markers: Edge and Firefox put
+  "InPrivate" / "Private Browsing" in the window title, and Chrome, Edge and Brave label
+  the toolbar's profile button "Incognito", "InPrivate" or "Private", which Retrace
+  reads via UI Automation. CI checks this against real Edge and Chrome windows. Leave
+  `capture_private_browsing` off (the default); other browsers may not mark their
+  private windows at all.
 - Clipboard logging (off by default) never reads copies that a password manager marks
   as excluded from clipboard monitoring.
 - Asking Chromium browsers for their address bar over UI Automation can switch on their
