@@ -204,6 +204,36 @@ def cmd_purge(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_optimize(args: argparse.Namespace) -> int:
+    from .capture.optimize import optimize
+    from .db import init_db
+
+    init_db()
+    report = optimize(dry_run=args.dry_run, max_seconds=args.max_seconds)
+    if args.json:
+        _print_json(report)
+        return 0
+    mb = lambda b: f"{b / 1048576:,.0f} MB"  # noqa: E731
+    verb = "Would save" if report["dry_run"] else "Saved"
+    print(f"Storage: {mb(report['before_bytes'])} -> {mb(report['after_bytes'])}  "
+          f"({verb.lower()} {mb(report['saved_bytes'])})")
+    th = report.get("thin") or {}
+    if th.get("days"):
+        print(f"  thin     {th['days']} day(s): {th['frames_dropped']} frame(s) dropped, "
+              f"{mb(th['bytes_freed'])} (schedule {th['schedule']})")
+    for name, t in report["tiers"].items():
+        if t["days"]:
+            print(f"  {name:8} {t['days']} day(s), {t['frames']} frame(s): "
+                  f"{mb(t['bytes_before'])} -> {mb(t['bytes_after'])}  "
+                  f"(after {t['after_days']} days, {t['max_edge']} px, quality {t['quality']})")
+    b = report["budget"]
+    if b["days_evicted"]:
+        print(f"  budget   {len(b['days_evicted'])} oldest day(s) lose thumbnails, {mb(b['bytes_freed'])}")
+    if report["incomplete"]:
+        print("  time budget reached; the next run carries on")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="retrace", description="Private, on-device macOS rewind.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -249,6 +279,12 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("purge", help="Delete captures + thumbnails older than N days.")
     sp.add_argument("--days", type=int, default=None)
     sp.set_defaults(func=cmd_purge)
+
+    sp = sub.add_parser("optimize", help="Shrink ageing thumbnails (and enforce max_storage_mb).")
+    sp.add_argument("--dry-run", action="store_true", help="Report projected savings; change nothing.")
+    sp.add_argument("--max-seconds", type=float, default=None, help="Stop after this long; resumes next run.")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_optimize)
 
     sp = sub.add_parser("collect", help="Run app plugin collectors (e.g. Claude Code history).")
     sp.set_defaults(func=cmd_collect)

@@ -10,6 +10,7 @@ test suite isolates itself from a real installation.
 from __future__ import annotations
 
 import os
+import tomllib
 from functools import lru_cache
 from pathlib import Path
 
@@ -79,6 +80,20 @@ class Settings(BaseSettings):
 
     # --- retention ----------------------------------------------------------
     retention_days: int = 30             # purge captures/thumbnails older than this
+
+    # --- storage optimiser (retrace optimize; runs daily in the daemon) ------
+    auto_optimize: bool = True           # re-encode ageing thumbnails once a day
+    compact_after_days: int = 3          # tier 1: same size, lower JPEG quality (0 = off)
+    compact_jpeg_quality: int = 60
+    deep_compact_after_days: int = 14    # tier 2: smaller and lower quality (0 = off)
+    deep_compact_max_edge: int = 960
+    deep_compact_jpeg_quality: int = 55
+    max_storage_mb: int = 0              # hard ceiling; oldest thumbnails go first (0 = off)
+    # Thin ageing days: "days:seconds" pairs. "1:60,3:120,14:300" keeps at most one frame a
+    # minute after a day, one per 2 min after 3 days, one per 5 min after 14, plus every
+    # app/window switch. Dropped frames lose only their image; their text stays searchable.
+    thin_schedule: str = ""              # "" = off
+    optimize_max_seconds: float = 300.0  # time budget per daily pass; the rest resumes next day
 
     # --- features -----------------------------------------------------------
     enable_semantic_search: bool = True  # compute & store NL embeddings
@@ -177,6 +192,11 @@ EDITABLE_KEYS: tuple[str, ...] = (
     "min_ax_text_len",
     "thumb_max_edge",
     "retention_days",
+    "auto_optimize",
+    "compact_after_days",
+    "deep_compact_after_days",
+    "max_storage_mb",
+    "thin_schedule",
     "enable_semantic_search",
     "enable_caption",
     "enable_vlm_caption",
@@ -226,7 +246,14 @@ def write_default_config(path: Path | None = None, *, overwrite: bool = False) -
 def update_config(updates: dict[str, object]) -> Settings:
     """Merge ``updates`` into config.toml (only EDITABLE_KEYS) and reload settings."""
     s = get_settings()
-    current: dict[str, object] = {k: getattr(s, k) for k in EDITABLE_KEYS}
+    # Keep keys that are set in the file but not editable here (e.g. bind_port), so saving
+    # settings from the web panel can't silently reset them.
+    current: dict[str, object] = {}
+    try:
+        current = tomllib.loads(s.config_path.read_text())
+    except (OSError, tomllib.TOMLDecodeError):
+        pass
+    current.update({k: getattr(s, k) for k in EDITABLE_KEYS})
     for key, value in updates.items():
         if key not in EDITABLE_KEYS:
             raise KeyError(f"{key!r} is not an editable setting")
