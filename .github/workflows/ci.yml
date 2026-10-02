@@ -52,6 +52,8 @@ jobs:
         env:
           RETRACE_HOME: ${{ runner.temp }}\retrace-smoke
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true  # a failing command fails the step
           uv run retrace init
           uv run retrace doctor
           uv run retrace tick --force

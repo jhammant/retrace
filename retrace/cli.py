@@ -348,7 +348,22 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _utf8_output() -> None:
+    """Write UTF-8 when output is piped or redirected.
+
+    Windows otherwise encodes pipes with the ANSI code page (cp1252), which cannot
+    represent the ✓/✗ marks and dashes Retrace prints, and the command crashes.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    _utf8_output()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

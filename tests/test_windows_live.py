@@ -125,19 +125,18 @@ def test_watcher_streams_foreground_changes():
     proc = subprocess.Popen([sys.executable, "-m", "retrace.native.win.watch"],
                             stdout=subprocess.PIPE, text=True)
     try:
-        first = json.loads(proc.stdout.readline())
+        first = json.loads(proc.stdout.readline())  # the initial foreground app
         assert first["event"] == "app" and "bundle_id" in first
+        # Opening a new topmost window moves the foreground: that must stream an event.
+        # (Match on the app, not the pid: uv's python.exe may be a launcher process.)
         other = subprocess.Popen([sys.executable, "-c", _SHOW_WINDOW.replace(TITLE, "Retrace watcher probe")])
         try:
-            deadline = time.time() + 20
-            seen = []
-            while time.time() < deadline:
+            deadline = time.time() + 45  # heartbeats every 30 s keep readline from blocking forever
+            evt = json.loads(proc.stdout.readline())
+            while evt["event"] == "heartbeat" and time.time() < deadline:
                 evt = json.loads(proc.stdout.readline())
-                seen.append(evt)
-                if evt["event"] == "app" and evt.get("pid") == other.pid:
-                    break
-            print("watch events:", seen)
-            assert any(e["event"] == "app" for e in seen)
+            print("initial:", first, "after switch:", evt)
+            assert evt["event"] == "app" and evt["bundle_id"] == "python.exe"
         finally:
             other.terminate()
             other.wait(timeout=10)
