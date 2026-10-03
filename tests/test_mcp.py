@@ -36,6 +36,7 @@ def test_tools_are_read_only(settings):
     assert names == {
         "retrace_search", "retrace_timeline", "retrace_get_capture",
         "retrace_what_was_i_doing", "retrace_stats", "retrace_now", "retrace_list_apps",
+        "retrace_patterns", "retrace_steps",
     }
     # No destructive verbs anywhere.
     forbidden = ("start", "stop", "purge", "tick", "delete", "pause", "resume", "config", "write")

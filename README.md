@@ -229,13 +229,41 @@ Extension over Tailscale — see the roadmap.
 
 ---
 
+## Patterns: what could you automate?
+
+Retrace can tell you what you keep doing by hand. `retrace patterns` mines the last few
+weeks, on-device, and ranks what it finds by an estimated cost in minutes a week:
+
+| Pattern | What it means | Usually fixed by |
+|---|---|---|
+| **loop** | flipping back and forth between two things (a terminal session and a web page) | bringing one into the other |
+| **habit** | a site you check on most days, usually at the same hours | a digest that checks it for you |
+| **carry** | copying in one app, then switching straight to another | the two apps talking directly |
+| **search** | the same web search on different days | a saved search or a watch |
+| **ask** | what you keep typing to AI assistants ("keep going", "what's next", the same request again) | autopilot, a status digest, a command or skill |
+
+```bash
+retrace patterns              # top candidates for the last 28 days
+retrace patterns --text       # include example prompts, copies and searches
+retrace steps --last 30m      # replay the last half hour as steps: capture a workflow
+retrace steps --since 14:05 --until 14:40 --json
+```
+
+`steps` folds consecutive captures of the same site, session or app into one step with
+its duration, titles, URLs and documents, with copies and prompts in between. Pipe it to
+an assistant to turn something you just did into a script or a skill. Both commands
+are also MCP tools (`retrace_patterns`, `retrace_steps`). Reports hold counts, apps,
+sites and session names; the text you typed or copied only appears with `--text` /
+`include_text`.
+
 ## MCP (read-only)
 
 Other agents can query Retrace over MCP. It exposes **only** read/search tools — no
 start/stop, no purge, no config changes:
 
 `retrace_search` · `retrace_timeline` · `retrace_get_capture` ·
-`retrace_what_was_i_doing` · `retrace_stats` · `retrace_now` · `retrace_list_apps`
+`retrace_what_was_i_doing` · `retrace_stats` · `retrace_now` · `retrace_list_apps` ·
+`retrace_patterns` · `retrace_steps`
 
 Register it (e.g. in `claude_desktop_config.json` or `.mcp.json`):
 
