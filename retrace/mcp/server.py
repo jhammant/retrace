@@ -158,6 +158,55 @@ def retrace_list_apps(start: str | None = None, end: str | None = None) -> dict:
     return {"start": start, "end": end, "apps": apps}
 
 
+@mcp.tool()
+def retrace_patterns(days: int = 28, include_text: bool = False, limit: int = 25) -> dict:
+    """What you repeat, ranked as automation candidates.
+
+    Mines the last ``days`` days for loops (flipping between two things), habits (sites
+    checked most days), carries (copy in one app, paste in another), repeated searches,
+    and repeated requests to AI assistants. Each candidate has a stable id, evidence,
+    an estimated minutes-per-week cost and a suggestion. Prompt, clipboard and search
+    text is left out unless include_text is true.
+    """
+    from ..insights import load_events, mine
+
+    days = max(1, min(int(days), 120))
+    report = mine(load_events(get_settings(), days=days), include_examples=include_text)
+    report["candidates"] = report["candidates"][: max(1, limit)]
+    return report
+
+
+@mcp.tool()
+def retrace_steps(start: str | None = None, end: str | None = None, last_minutes: int | None = None,
+                  include_text: bool = False) -> dict:
+    """Replay a stretch of time as ordered steps, to capture a workflow you just did.
+
+    Give start/end (ISO datetimes) or last_minutes. Consecutive captures of the same
+    site, session or app fold into one step with its duration, titles, URLs and
+    documents; copies, prompts to AI tools and plugin events sit between them.
+    Text is left out unless include_text is true.
+    """
+    from ..insights import steps as _steps
+
+    now = datetime.now().astimezone()
+    if last_minutes:
+        lo, hi = now - timedelta(minutes=int(last_minutes)), now
+    else:
+        lo = _parse_local(start) or now - timedelta(minutes=30)
+        hi = _parse_local(end) or now
+    return _steps(get_settings(), start=lo, end=hi, include_text=include_text)
+
+
+def _parse_local(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.astimezone()
+
+
 def main() -> None:
     """Entry point for ``retrace mcp`` — runs the stdio MCP server."""
     init_db()
