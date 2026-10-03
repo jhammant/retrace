@@ -61,7 +61,7 @@ def week(settings):
                 _visit(s, "https://www.google.com/search?q=north+face+duffel+small", t + timedelta(minutes=7))
             # Prompts to Claude Code: two nudges, one repeated request, and machine noise.
             for i, prompt in enumerate([
-                "keep going", "Keep going please",
+                "keep going", "Keep going please", "ok - what do we need to do next to launch the portal?",
                 "check the deploy dashboard for errors please",
                 "You are a learning-signal extractor. Below is a digest",
                 "[Image: original 10x10, displayed at 10x10.]",
@@ -84,7 +84,8 @@ def test_timeline_labels_what_each_app_was_showing(week):
     assert ev.focus_source == "knowledgec"
     # Machine-written prompts are not "asks"; the pasted-image-only one neither.
     assert sorted({a.prompt for a in ev.asks}) == sorted(
-        {"keep going", "Keep going please", "check the deploy dashboard for errors please"})
+        {"keep going", "Keep going please", "ok - what do we need to do next to launch the portal?",
+         "check the deploy dashboard for errors please"})
 
 
 def test_mining_finds_each_kind_of_pattern(week):

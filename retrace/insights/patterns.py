@@ -44,6 +44,7 @@ MIN_INTENT_PROMPTS = 8
 MIN_INTENT_DAYS = 3
 MIN_REPEAT = 3
 REPEAT_SIMILARITY = 0.6
+NUDGE_MAX_WORDS = 8         # a go-ahead is short; longer prompts starting "ok ..." are requests
 
 # Sites that are plumbing rather than a destination, or calls rather than check-ins.
 _NOT_HABITS = {"google.com", "accounts.google.com", "newtab", "localhost", "127.0.0.1",
@@ -417,6 +418,8 @@ def _asks(ev: Events, include_examples: bool) -> dict:
     for a in ev.asks:
         first = a.prompt.strip().split("\n", 1)[0]
         for key, _label, rx, _tip in _INTENT_RX:
+            if key == "nudge" and len(first.split()) > NUDGE_MAX_WORDS:
+                continue  # "ok - what do we need next to ..." is a question, not a go-ahead
             if rx.search(first):
                 b = by[key]
                 b["prompts"] += 1
