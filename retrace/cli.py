@@ -279,6 +279,86 @@ def cmd_optimize(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_when(value: str):
+    """'14:05' (today), '2026-10-02 14:05', or an ISO datetime -> aware local datetime."""
+    from datetime import datetime
+
+    v = value.strip()
+    now = datetime.now().astimezone()
+    if len(v) <= 5 and ":" in v:
+        h, m = (int(x) for x in v.split(":"))
+        return now.replace(hour=h, minute=m, second=0, microsecond=0)
+    dt = datetime.fromisoformat(v)
+    return dt if dt.tzinfo else dt.astimezone()
+
+
+def _parse_span(value: str):
+    """'30m', '2h', '90' (minutes) -> timedelta."""
+    from datetime import timedelta
+
+    v = value.strip().lower()
+    if v.endswith("h"):
+        return timedelta(hours=float(v[:-1]))
+    return timedelta(minutes=float(v.rstrip("m")))
+
+
+def cmd_patterns(args: argparse.Namespace) -> int:
+    from .insights import load_events, mine
+
+    report = mine(load_events(days=args.days), include_examples=args.text)
+    if args.json:
+        _print_json(report)
+        return 0
+    w, sm = report["window"], report["summary"]
+    print(f"Last {args.days} days: {w['active_days']} active days, {sm['focus_hours']} h in focus, "
+          f"{sm['switches']} switches, {sm['typed_prompts']} prompts to AI tools, "
+          f"{sm['clipboard_copies']} copies (focus from {w['focus_source']})")
+    cands = report["candidates"][: args.top]
+    if not cands:
+        print("\nNothing repeats often enough to suggest yet.")
+        return 0
+    print(f"\nAutomation candidates (top {len(cands)}, by estimated minutes a week):")
+    for i, c in enumerate(cands, 1):
+        ev = ", ".join(f"{k} {v}" for k, v in c["evidence"].items() if not isinstance(v, list))
+        print(f"\n{i:2}. [{c['kind']}] {c['title']}  ~{c['weekly_minutes']:.0f} min/week")
+        print(f"    {ev}")
+        print(f"    → {c['suggestion']}")
+        for ex in c.get("examples", [])[:2]:
+            print(f"      e.g. {ex}")
+    return 0
+
+
+def cmd_steps(args: argparse.Namespace) -> int:
+    from datetime import datetime
+
+    from .insights import steps
+
+    now = datetime.now().astimezone()
+    if args.since:
+        start = _parse_when(args.since)
+        end = _parse_when(args.until) if args.until else now
+    else:
+        start, end = now - _parse_span(args.last), now
+    out = steps(start=start, end=end, include_text=args.text)
+    if args.json:
+        _print_json(out)
+        return 0
+    print(f"{start:%H:%M}–{end:%H:%M}: {out['counts']['screen']} screen steps, {out['counts']['copy']} copies, "
+          f"{out['counts']['ask']} prompts, {out['counts']['event']} other events")
+    for st in out["steps"]:
+        if st["type"] == "screen":
+            extra = f"  ({', '.join(st['titles'][:2])})" if st["titles"] else ""
+            print(f"  {st['start'][11:16]}  {st['minutes']:5.1f} min  {st['context']}{extra}")
+        elif st["type"] == "copy":
+            print(f"  {st['at'][11:16]}             copied {st['kind']} ({st['chars']} chars)")
+        elif st["type"] == "ask":
+            print(f"  {st['at'][11:16]}             asked {st['assistant']} ({st['words']} words)"
+                  + (f": {st['prompt'][:80]}" if 'prompt' in st else ""))
+        else:
+            print(f"  {st['at'][11:16]}             {st.get('app') or st['source']} event")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="retrace", description="Private, on-device rewind for macOS and Windows.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -333,6 +413,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("collect", help="Run app plugin collectors (e.g. Claude Code history).")
     sp.set_defaults(func=cmd_collect)
+
+    sp = sub.add_parser("patterns", help="What you repeat, ranked as automation candidates.")
+    sp.add_argument("--days", type=int, default=28)
+    sp.add_argument("--top", type=int, default=15)
+    sp.add_argument("--text", action="store_true", help="Include example prompts, copies and searches.")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_patterns)
+
+    sp = sub.add_parser("steps", help="Replay a stretch of time as steps (capture a workflow).")
+    sp.add_argument("--last", default="30m", help="How far back, e.g. 30m, 2h (default 30m).")
+    sp.add_argument("--since", help="Start instead, e.g. 14:05 or 2026-10-02T14:05.")
+    sp.add_argument("--until", help="End (default now).")
+    sp.add_argument("--text", action="store_true", help="Include copied/typed text and on-screen samples.")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_steps)
 
     sp = sub.add_parser("plugins", help="List installed app plugins.")
     sp.set_defaults(func=cmd_plugins)
