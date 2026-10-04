@@ -37,6 +37,7 @@ def _utc(ts: float) -> datetime:
 class MailPlugin(RetracePlugin):
     name = "mail"
     description = "Ingest recent Apple Mail subjects/senders (not bodies)."
+    platforms = ("darwin",)
 
     def collect(self, settings: Settings) -> dict:
         idx = _find_index()

@@ -16,19 +16,30 @@ from __future__ import annotations
 import json
 import logging
 import os
-import resource
 import subprocess
+import sys
 import threading
 import time
 from datetime import datetime
 
 from ..config import Settings, get_settings
 from ..native.helpers import get_helper
+from ..platform import IS_WINDOWS, no_window
 from .pipeline import capture_once
 
 
 def fd_usage() -> tuple[int, int]:
-    """(open descriptors, soft RLIMIT_NOFILE) for this process."""
+    """(open descriptors, soft RLIMIT_NOFILE) for this process.
+
+    Windows has no descriptor rlimit, so it reports open handles with a limit of
+    0, which the headroom checks treat as "no ceiling".
+    """
+    if IS_WINDOWS:
+        import psutil
+
+        return psutil.Process().num_handles(), 0
+    import resource
+
     used = len(os.listdir("/dev/fd"))
     soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     return used, int(soft)
@@ -37,7 +48,11 @@ log = logging.getLogger("retrace.daemon")
 
 
 def power_state() -> dict:
-    """Best-effort AC/battery + low-power-mode detection via ``pmset``."""
+    """Best-effort AC/battery + low-power-mode detection (``pmset`` on macOS)."""
+    if IS_WINDOWS:
+        from ..native.win.presence import power_state as win_power_state
+
+        return win_power_state()
     on_battery = False
     low_power = False
     try:
@@ -167,17 +182,23 @@ class CaptureDaemon:
             self._busy.release()
 
     # --- watcher -----------------------------------------------------------
+    def _watch_command(self) -> list[str]:
+        """The app-switch event stream: a Swift binary on macOS, a Python module on Windows."""
+        if IS_WINDOWS:
+            return [sys.executable, "-m", "retrace.native.win.watch"]
+        return [str(get_helper("retrace-watch", self._s).ensure_built())]
+
     def _watch_loop(self) -> None:
         try:
-            binary = get_helper("retrace-watch", self._s).ensure_built()
+            cmd = self._watch_command()
         except Exception as exc:
             log.warning("event watcher unavailable (%s); relying on fallback tick", exc)
             return
         while not self._stop.is_set():
             try:
                 self._watch_proc = subprocess.Popen(
-                    [str(binary)], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                    text=True, bufsize=1,
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    text=True, bufsize=1, encoding="utf-8", **no_window(),
                 )
             except OSError as exc:
                 log.warning("could not start watcher: %s", exc)

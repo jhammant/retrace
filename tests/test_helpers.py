@@ -5,9 +5,15 @@ These tests use fake executable stand-ins so they never invoke ``swiftc``.
 
 from __future__ import annotations
 
+import sys
+
 import pytest
 
 from retrace.native import helpers as H
+
+needs_posix_shell = pytest.mark.skipif(
+    sys.platform == "win32", reason="the fake helper binaries are bash scripts"
+)
 
 
 def test_known_helpers_have_sources_for_current_milestones():
@@ -31,6 +37,7 @@ def test_needs_build_hash_logic(settings):
     assert h.needs_build() is True  # stale hash -> rebuild
 
 
+@needs_posix_shell
 def test_run_parses_json(settings, monkeypatch):
     h = H.SwiftHelper("retrace-present", settings)
     settings.bin_dir.mkdir(parents=True, exist_ok=True)
@@ -44,6 +51,7 @@ def test_run_parses_json(settings, monkeypatch):
     assert out["idle_seconds"] == 3
 
 
+@needs_posix_shell
 def test_run_fail_soft_on_non_json(settings, monkeypatch):
     h = H.SwiftHelper("retrace-present", settings)
     settings.bin_dir.mkdir(parents=True, exist_ok=True)
@@ -68,6 +76,7 @@ def test_build_missing_source_raises(settings):
         h.build()
 
 
+@needs_posix_shell
 def test_takes_last_line_when_warnings_precede_json(settings, monkeypatch):
     h = H.SwiftHelper("retrace-present", settings)
     settings.bin_dir.mkdir(parents=True, exist_ok=True)

@@ -10,6 +10,7 @@ import json
 import shutil
 
 from ..config import Settings, get_settings
+from ..platform import IS_MACOS, PLATFORM
 from .helpers import build_all, embed_text, get_helper, get_presence
 from .permissions import check_all
 
@@ -22,6 +23,8 @@ def _check_embeddings(s: Settings) -> dict:
 
 
 def _check_foundation_models(s: Settings) -> dict:
+    if not IS_MACOS:
+        return {"available": False, "reason": "macOS only; template captions are used"}
     helper = get_helper("retrace-caption", s)
     if not helper.source_exists():
         return {"available": False, "reason": "no source"}
@@ -65,6 +68,7 @@ def run_doctor(settings: Settings | None = None) -> dict:
     snap = StatusLedger(s).snapshot()
 
     return {
+        "platform": PLATFORM,
         "home": str(s.home),
         "swiftc": shutil.which("swiftc"),
         "helpers": helpers,
@@ -84,13 +88,16 @@ def format_report(report: dict) -> str:
     lines: list[str] = []
     lines.append("Retrace doctor")
     lines.append("=" * 52)
+    windows = report.get("platform") == "windows"
+    lines.append(f"Platform    : {report.get('platform', '?')}")
     lines.append(f"Home        : {report['home']}")
-    lines.append(f"swiftc      : {report['swiftc'] or '✗ not found (install Xcode CLT)'}")
+    if not windows:
+        lines.append(f"swiftc      : {report['swiftc'] or '✗ not found (install Xcode CLT)'}")
     lines.append(f"Capture     : {'ENABLED' if report.get('capture_enabled') else 'off'}")
 
-    lines.append("\nNative helpers")
+    lines.append("\nWindows backends" if windows else "\nNative helpers")
     for name, status in report["helpers"].items():
-        ok = status == "ok" or status.startswith("no source")
+        ok = status.startswith("ok") or status.startswith("no source") or status.startswith(("template", "n/a"))
         lines.append(f"  {_mark(ok)} {name.ljust(22)} {status}")
 
     lines.append("\nPermissions")
@@ -104,13 +111,14 @@ def format_report(report: dict) -> str:
 
     caps = report["capabilities"]
     lines.append("\nCapabilities")
-    lines.append(f"  {_mark(caps.get('screen_recording'))} screen recording")
-    lines.append(f"  {_mark(caps.get('accessibility'))} accessibility text")
+    if not windows:
+        lines.append(f"  {_mark(caps.get('screen_recording'))} screen recording")
+        lines.append(f"  {_mark(caps.get('accessibility'))} accessibility text")
     emb = caps.get("embeddings", {})
     lines.append(f"  {_mark(emb.get('available'))} semantic embeddings  {emb.get('model', '')}")
     fm = caps.get("foundation_models_caption", {})
     fm_extra = fm.get("model") or fm.get("reason", "")
-    lines.append(f"  {_mark(fm.get('available'))} foundation models caption  {fm_extra}")
+    lines.append(f"  {_mark(fm.get('available') if not windows else None)} foundation models caption  {fm_extra}")
 
     db = report["database"]
     lines.append("\nDatabase")

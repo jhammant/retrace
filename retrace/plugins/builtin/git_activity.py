@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from ...config import Settings
+from ...platform import no_window
 from .._ingest import ingest_captures
 from ..base import RetracePlugin
 
@@ -34,7 +35,8 @@ class GitActivityPlugin(RetracePlugin):
                 out = subprocess.run(
                     ["git", "-C", str(repo), "log", "--all", "--since=60 days ago",
                      "--pretty=%H%x00%ct%x00%an%x00%s", "-n", "300"],
-                    capture_output=True, text=True, timeout=8,
+                    capture_output=True, text=True, encoding="utf-8", errors="replace",
+                    timeout=8, **no_window(),
                 )
             except (OSError, subprocess.SubprocessError):
                 continue

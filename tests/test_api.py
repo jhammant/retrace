@@ -81,6 +81,7 @@ def test_config_get_and_update(settings):
 
 
 def test_permissions(settings, monkeypatch):
+    monkeypatch.setattr("retrace.native.permissions.IS_WINDOWS", False)  # the macOS checks
     monkeypatch.setattr(
         "retrace.native.permissions.get_presence",
         lambda *a, **k: {"ok": True, "screen_recording": True, "accessibility": True},

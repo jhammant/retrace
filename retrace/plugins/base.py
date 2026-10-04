@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from ..config import Settings
 
 
@@ -17,7 +19,13 @@ class RetracePlugin:
     #: One-line description shown in the UI / CLI.
     description: str = ""
     #: Bundle ids whose captures this plugin enriches (empty = no enrichment).
+    #: On Windows the app id is the executable name, e.g. ``"spotify.exe"``.
     bundle_ids: tuple[str, ...] = ()
+    #: ``sys.platform`` values this plugin runs on (empty = every platform).
+    platforms: tuple[str, ...] = ()
+
+    def supported(self) -> bool:
+        return not self.platforms or sys.platform in self.platforms
 
     def enrich(self, context: dict, settings: Settings) -> dict | None:
         """Augment a capture of a matching frontmost app.

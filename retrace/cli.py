@@ -1,7 +1,8 @@
 """The ``retrace`` command-line entry point.
 
 Subcommands: ``init``, ``serve``, ``mcp``, ``tick``, ``doctor``, ``start``,
-``stop``, ``status``, ``scan``, ``purge``, ``version``.
+``stop``, ``status``, ``scan``, ``purge``, ``optimize``, ``collect``, ``plugins``,
+``menubar`` (``tray``), ``autostart``, ``version``.
 
 Handlers import heavy modules lazily so the CLI stays responsive and so a
 half-built checkout can still run ``--help``.
@@ -51,6 +52,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
     s = get_settings()
     s.ensure_dirs()
     init_db(s)
+    if sys.stdout is None or sys.stderr is None:
+        # Windowless (pythonw, e.g. started at sign-in): there is no console, and
+        # uvicorn's logging needs real streams. Keep a log file instead.
+        log = open(s.home / "server.log", "a", buffering=1, encoding="utf-8")  # noqa: SIM115
+        sys.stdout = sys.stdout or log
+        sys.stderr = sys.stderr or log
     host = args.host or s.bind_host
     port = args.port or s.bind_port
     print(f"Retrace API + web UI on http://{host}:{port}  (Ctrl-C to stop)")
@@ -144,7 +151,10 @@ def cmd_plugins(args: argparse.Namespace) -> int:
 
 
 def cmd_menubar(args: argparse.Namespace) -> int:
-    """Show the macOS menu bar item. Starts the server if it isn't already running."""
+    """Show the menu bar item (macOS) or tray icon (Windows).
+
+    Starts the server if it isn't already running.
+    """
     import subprocess
     import sys
     import time
@@ -152,6 +162,7 @@ def cmd_menubar(args: argparse.Namespace) -> int:
 
     from .config import get_settings
     from .native.helpers import get_helper
+    from .platform import IS_WINDOWS, detached
 
     s = get_settings()
     base = f"http://{s.bind_host}:{s.bind_port}"
@@ -168,15 +179,29 @@ def cmd_menubar(args: argparse.Namespace) -> int:
         # Detached so capture keeps running after the menu bar UI is closed.
         subprocess.Popen(
             [sys.executable, "-m", "retrace.cli", "serve"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True,
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            **detached(),
         )
         for _ in range(30):
             if server_up():
                 break
             time.sleep(0.5)
         if not server_up():
-            print("Server did not come up in time; the menu bar will show 'offline'.")
+            print("Server did not come up in time; the icon will show 'offline'.")
+
+    if IS_WINDOWS:
+        from .native.win.tray import run as run_tray
+
+        print("Retrace is now in the notification area (bottom-right; it may be under ^). "
+              "Closing it leaves capture running.")
+        try:
+            run_tray(base)
+        except ImportError as exc:
+            print(f"Could not load the tray icon ({exc}); reinstall retrace-cli on Windows.")
+            return 1
+        except KeyboardInterrupt:
+            pass
+        return 0
 
     try:
         binary = get_helper("retrace-menubar", s).ensure_built()
@@ -189,6 +214,26 @@ def cmd_menubar(args: argparse.Namespace) -> int:
         subprocess.run([str(binary), base])
     except KeyboardInterrupt:
         pass
+    return 0
+
+
+def cmd_autostart(args: argparse.Namespace) -> int:
+    """Start Retrace (tray icon + capture server) when you sign in to Windows."""
+    from .platform import IS_WINDOWS
+
+    if not IS_WINDOWS:
+        print("On macOS, use the launchd agent in scripts/com.retrace.daemon.plist "
+              "(copy it to ~/Library/LaunchAgents and `launchctl load` it).")
+        return 1
+    from .native.win import autostart
+
+    if args.action == "install":
+        link = autostart.install()
+        print(f"Retrace will start at sign-in: {link}")
+    elif args.action == "remove":
+        print("Removed." if autostart.remove() else "Autostart was not installed.")
+    else:
+        _print_json(autostart.status())
     return 0
 
 
@@ -235,7 +280,7 @@ def cmd_optimize(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="retrace", description="Private, on-device macOS rewind.")
+    p = argparse.ArgumentParser(prog="retrace", description="Private, on-device rewind for macOS and Windows.")
     sub = p.add_subparsers(dest="command", required=True)
 
     sp = sub.add_parser("init", help="Create ~/.retrace, write default config, init the database.")
@@ -272,7 +317,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("status", help="Print the capture status ledger.")
     sp.set_defaults(func=cmd_status)
 
-    sp = sub.add_parser("scan", help="Ingest activity (knowledgeC / Safari / Chrome).")
+    sp = sub.add_parser("scan", help="Ingest activity (knowledgeC / Safari / Chrome / Edge).")
     sp.add_argument("--full", action="store_true", help="Full rescan instead of incremental.")
     sp.set_defaults(func=cmd_scan)
 
@@ -292,13 +337,33 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("plugins", help="List installed app plugins.")
     sp.set_defaults(func=cmd_plugins)
 
-    sp = sub.add_parser("menubar", help="Show the macOS menu bar item (starts the server if needed).")
+    sp = sub.add_parser("menubar", aliases=["tray"],
+                        help="Show the menu bar item (macOS) or tray icon (Windows); starts the server if needed.")
     sp.set_defaults(func=cmd_menubar)
+
+    sp = sub.add_parser("autostart", help="Windows: start Retrace at sign-in (install | remove | status).")
+    sp.add_argument("action", nargs="?", choices=["install", "remove", "status"], default="status")
+    sp.set_defaults(func=cmd_autostart)
 
     return p
 
 
+def _utf8_output() -> None:
+    """Write UTF-8 when output is piped or redirected.
+
+    Windows otherwise encodes pipes with the ANSI code page (cp1252), which cannot
+    represent the ✓/✗ marks and dashes Retrace prints, and the command crashes.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (ValueError, OSError):
+                pass
+
+
 def main(argv: Sequence[str] | None = None) -> int:
+    _utf8_output()
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

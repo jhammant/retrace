@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+import sys
+
 from retrace.plugins import registry
+
+MAC_ONLY = {"apple-music", "calendar", "mail", "safari-history", "reading-list"}
 
 
 def test_all_builtins_load(settings):
     names = {p.name for p in registry.load_plugins(settings)}
     for expected in {
-        "claude-code", "spotify", "apple-music", "system-stats", "calendar",
-        "notifications", "git-commits", "clipboard", "mail", "downloads", "recent-files",
+        "claude-code", "spotify", "system-stats", "notifications", "git-commits",
+        "clipboard", "downloads", "recent-files",
     }:
         assert expected in names, expected
+    if sys.platform == "darwin":
+        assert MAC_ONLY <= names
+    else:
+        assert not MAC_ONLY & names  # Apple-only sources aren't offered elsewhere
 
 
 def test_collectors_failsoft_with_absent_sources(settings, monkeypatch, tmp_path):
