@@ -85,3 +85,17 @@ def test_maybe_daily_jobs_runs_once_per_day(settings, monkeypatch):
     d._maybe_daily_jobs()
     d._maybe_daily_jobs()  # same day -> no second purge
     assert len(runs) == 1
+
+
+def test_active_samples_credit_elapsed_time_and_cap_long_gap(settings, monkeypatch):
+    from retrace.activity import service
+
+    calls = []
+    clock = iter([100.0, 172.0, 400.0])
+    monkeypatch.setattr(D.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(service, "record_active_sample", lambda *a, **kw: calls.append(kw["elapsed_s"]) or True)
+    d = D.CaptureDaemon(settings, enable_watcher=False, enable_fallback=False)
+    d._record_active(45)
+    d._record_active(45)
+    d._record_active(45)
+    assert calls == [45, 72, 45]
