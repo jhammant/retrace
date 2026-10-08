@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+import time
 
 from retrace.db import session_scope
 from retrace.models import ActivityEvent
 from retrace.stats import service as stats
+from retrace.activity import service as activity
 
 WIDE_START = datetime(2026, 6, 1)
 WIDE_END = datetime(2026, 7, 1)
@@ -75,3 +77,17 @@ def test_top_and_weekly_shape(settings):
     wk = stats.weekly("2026-06-16", settings)
     assert len(wk["days"]) == 7
     assert "top_apps" in wk
+
+
+def test_midnight_bst_sample_counts_on_local_day(settings, monkeypatch):
+    monkeypatch.setenv("TZ", "Europe/London")
+    time.tzset()
+    monkeypatch.setattr(activity, "utcnow", lambda: datetime(2026, 10, 7, 23, 30))
+    monkeypatch.setattr(activity, "get_presence", lambda *a, **k: {"ok": True, "present": True, "idle_seconds": 0})
+    try:
+        activity.record_active_sample(45, app="Safari", settings=settings)
+        assert stats.daily("2026-10-08", settings)["active_seconds"] == 45
+        assert stats.daily("2026-10-07", settings)["active_seconds"] == 0
+    finally:
+        monkeypatch.delenv("TZ", raising=False)
+        time.tzset()
