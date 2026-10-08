@@ -119,6 +119,32 @@ def test_active_sample_uses_utc_start_and_local_day_in_bst(settings, monkeypatch
         time.tzset()
 
 
+def test_idle_meeting_app_is_recorded(settings, monkeypatch):
+    monkeypatch.setattr(service, "get_presence", lambda *a, **k: {"ok": True, "present": False, "idle_seconds": 300})
+    assert service.record_active_sample(45, app="Microsoft Teams", settings=settings)
+    with session_scope(settings) as s:
+        row = s.query(ActivityEvent).one()
+        assert row.detail == {"idle_seconds": 300, "meeting": True}
+
+
+def test_idle_browser_meeting_title_is_recorded(settings, monkeypatch):
+    monkeypatch.setattr(service, "get_presence", lambda *a, **k: {"ok": True, "present": False, "idle_seconds": 300})
+    assert service.record_active_sample(45, app="Google Chrome", settings=settings,
+                                        window_title="Meet - Planning")
+
+
+def test_idle_meeting_stops_after_three_hours(settings, monkeypatch):
+    monkeypatch.setattr(service, "get_presence", lambda *a, **k: {"ok": True, "present": False, "idle_seconds": 10801})
+    assert service.record_active_sample(45, app="Microsoft Teams", settings=settings) is False
+
+
+def test_locked_meeting_app_is_skipped(settings, monkeypatch):
+    monkeypatch.setattr(service, "get_presence", lambda *a, **k: {
+        "ok": True, "present": False, "idle_seconds": 300, "screen_locked": True,
+    })
+    assert service.record_active_sample(45, app="Microsoft Teams", settings=settings) is False
+
+
 def test_repair_recredits_and_rebuckets_idempotently(settings, monkeypatch, capsys):
     from retrace.cli import main
 

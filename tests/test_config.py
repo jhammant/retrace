@@ -82,3 +82,15 @@ def test_update_config_keeps_non_editable_keys_already_in_the_file(settings):
     assert s.retention_days == 14
     assert s.bind_port == 8766
     assert "bind_port = 8766" in settings.config_path.read_text()
+
+
+def test_meeting_settings_round_trip(settings):
+    from retrace import config as cfg
+
+    assert "Microsoft Teams" in settings.meeting_apps
+    updated = cfg.update_config({"meeting_apps": ["Custom Calls"],
+                                 "meeting_title_patterns": ["Custom Meeting"]})
+    assert updated.meeting_apps == ["Custom Calls"]
+    assert updated.meeting_title_patterns == ["Custom Meeting"]
+    raw = tomllib.loads(settings.config_path.read_text())
+    assert raw["meeting_apps"] == ["Custom Calls"]
