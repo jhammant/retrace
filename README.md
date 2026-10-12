@@ -341,8 +341,10 @@ subfolders, so `acme` includes `acme/worker`. Over HTTP:
 ### From Taxi and Orbital
 
 [`taxi/`](taxi/) describes these endpoints in [Taxi](https://taxilang.org), so an
-[Orbital](https://orbitalhq.com) running on the same machine can join them with your other
-data: hands-on time next to each project's plan, what you repeat in each, and so on. Map the
+[Orbital](https://orbitalhq.com) running on the same machine can query your time per project
+and what you repeat, and join them with your other data. Projects are keyed by
+`retrace.ProjectName`, the folder name; to join another schema's projects, give your Orbital an
+operation that takes that schema's folder-name type and calls the same URL. Map the
 `retraceApi` placeholder to `retrace serve` in Orbital's `services.conf`
 (`http://host.docker.internal:8765` from Docker). It describes only read-only, metadata-only
 endpoints; [`taxi/queries/`](taxi/queries/) has examples.
