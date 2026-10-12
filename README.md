@@ -326,6 +326,32 @@ are also MCP tools (`retrace_patterns`, `retrace_steps`). Reports hold counts, a
 sites and session names; the text you typed or copied only appears with `--text` /
 `include_text`.
 
+### Time per project
+
+A project is a folder you work in with Claude Code (`~/dev/acme` is `acme`). Retrace counts
+your hands-on time on it in 5-minute blocks: a prompt in that folder, a terminal tab showing
+one of its sessions, its GitHub repository, or a file under its folder. That's your own time
+(prompting, reading, reviewing), not how long an agent ran by itself. A project takes in its
+subfolders, so `acme` includes `acme/worker`. Over HTTP:
+
+- `GET /insights/projects?days=7`: every folder you worked in, most time first
+- `GET /insights/projects/acme`: one project, last 7 and 28 days, and when you last touched it
+- `GET /insights/projects/acme/patterns`: what you keep asking for in that project
+
+### From Taxi and Orbital
+
+[`taxi/`](taxi/) describes these endpoints in [Taxi](https://taxilang.org), so an
+[Orbital](https://orbitalhq.com) running on the same machine can join them with your other
+data: hands-on time next to each project's plan, what you repeat in each, and so on. Map the
+`retraceApi` placeholder to `retrace serve` in Orbital's `services.conf`
+(`http://host.docker.internal:8765` from Docker). It describes only read-only, metadata-only
+endpoints; [`taxi/queries/`](taxi/queries/) has examples.
+
+```taxiql
+// Where your hands-on time went this week, folder by folder.
+find { retrace.WeekByProject } as { projects : retrace.ProjectTime[] }
+```
+
 ## MCP (read-only)
 
 Other agents can query Retrace over MCP. It exposes **only** read/search tools — no
@@ -360,6 +386,8 @@ Bound to `127.0.0.1`. Highlights:
 - `GET /search?q=&mode=text|semantic|hybrid`
 - `POST /activity/scan` · `GET /activity/apps|domains|status`
 - `GET /stats/daily|weekly|top`
+- `GET /insights/patterns` · `GET /insights/steps?last_minutes=` · `GET /insights/projects[/{name}[/patterns]]`
+  (metadata only: there is no option to include typed or copied text over HTTP)
 - `GET /permissions` · `GET|POST /config` · `GET /plugins` · `POST /plugins/collect`
 
 ---

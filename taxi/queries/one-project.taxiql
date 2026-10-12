@@ -1,0 +1,9 @@
+// One project: time this week and this month, when you last touched it, and what you keep asking for there.
+given { name : retrace.ProjectName = "acme" }
+find { retrace.ProjectActivity } as {
+  project : retrace.ProjectName
+  lastActive : retrace.LastActiveAt
+  minutesThisWeek : retrace.MinutesLast7Days
+  minutesThisMonth : retrace.MinutesLast28Days
+  repeats : retrace.ProjectRepeat[]
+}

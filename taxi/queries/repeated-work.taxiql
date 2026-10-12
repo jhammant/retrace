@@ -1,0 +1,4 @@
+// What you repeat, ranked by the minutes a week it costs.
+find { retrace.RepeatedWork } as {
+  candidates : retrace.AutomationCandidate[]
+}

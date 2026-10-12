@@ -1,0 +1,103 @@
+// Retrace for Taxi and Orbital: your hands-on time per project, and what you repeat, read from
+// Retrace's local HTTP API (`retrace serve`). Metadata only: names, counts and times, never what
+// was on screen, copied or typed.
+//
+// "retraceApi" is a placeholder host: map it in Orbital's services.conf to wherever Retrace
+// listens. From Orbital in Docker on the same machine that is http://host.docker.internal:<port>.
+
+import taxi.http.HttpOperation
+import taxi.http.PathVariable
+
+namespace retrace
+
+// A folder you work in with Claude Code: ~/dev/acme is "acme". Case and separators don't matter.
+type ProjectName inherits String
+type FoundInRetrace inherits Boolean
+type LastActiveAt inherits Instant
+type DaysSinceActive inherits Int
+// Hands-on time: 5-minute blocks with a prompt in the project's folder, a terminal tab showing
+// one of its sessions, its GitHub repository or a file under its folder.
+type MinutesLast7Days inherits Int
+type PromptsLast7Days inherits Int
+type ActiveDaysLast7Days inherits Int
+type MinutesLast28Days inherits Int
+type PromptsLast28Days inherits Int
+type ActiveDaysLast28Days inherits Int
+
+// One project (with its subfolders) over the last 7 and 28 days.
+model ProjectActivity {
+  project : ProjectName
+  found : FoundInRetrace
+  last_active : LastActiveAt?
+  days_since_active : DaysSinceActive?
+  minutes_7d : MinutesLast7Days
+  prompts_7d : PromptsLast7Days
+  active_days_7d : ActiveDaysLast7Days
+  minutes_28d : MinutesLast28Days
+  prompts_28d : PromptsLast28Days
+  active_days_28d : ActiveDaysLast28Days
+}
+
+type HandsOnMinutes inherits Int
+type PromptCount inherits Int
+type ActiveDays inherits Int
+
+// Every folder you worked in over the last week, most hands-on time first.
+model ProjectTime {
+  project : ProjectName
+  minutes : HandsOnMinutes
+  prompts : PromptCount
+  active_days : ActiveDays
+  last_active : LastActiveAt?
+}
+
+model WeekByProject {
+  projects : ProjectTime[]
+}
+
+type CandidateId inherits String        // stable across runs, so a weekly check can tell new from known
+type CandidateKind inherits String      // loop, routine, habit, carry, search, ask-intent or ask-repeat
+type CandidateTitle inherits String
+type WeeklyMinutes inherits Decimal
+type EstimateMethod inherits String
+type Suggestion inherits String
+
+// Something you repeat, ranked by the minutes a week it costs.
+model AutomationCandidate {
+  id : CandidateId
+  kind : CandidateKind
+  title : CandidateTitle
+  weekly_minutes : WeeklyMinutes
+  estimate : EstimateMethod
+  suggestion : Suggestion
+}
+
+// Everything you repeat over the last 28 days.
+model RepeatedWork {
+  candidates : AutomationCandidate[]
+}
+
+// Something you keep asking for in one project. Its own type, so a query about a project gets
+// that project's repeats rather than everything you repeat.
+model ProjectRepeat inherits AutomationCandidate {}
+
+// What you keep asking for in one project, from your prompts there over the last 28 days.
+model ProjectRepeats {
+  project : ProjectName
+  prompts : PromptsLast28Days
+  candidates : ProjectRepeat[]
+}
+
+service RetraceService {
+  @HttpOperation(method = "GET", url = "http://retraceApi/insights/projects/{name}")
+  operation projectActivity(@PathVariable("name") name : ProjectName) : ProjectActivity
+
+  @HttpOperation(method = "GET", url = "http://retraceApi/insights/projects/{name}/patterns")
+  operation projectRepeats(@PathVariable("name") name : ProjectName) : ProjectRepeats
+
+  @HttpOperation(method = "GET", url = "http://retraceApi/insights/projects")
+  operation weekByProject() : WeekByProject
+
+  @HttpOperation(method = "GET", url = "http://retraceApi/insights/patterns")
+  operation repeatedWork() : RepeatedWork
+}
