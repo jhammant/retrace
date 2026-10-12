@@ -1,0 +1,4 @@
+// Where your hands-on time went this week, folder by folder.
+find { retrace.WeekByProject } as {
+  projects : retrace.ProjectTime[]
+}

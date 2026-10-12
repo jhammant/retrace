@@ -93,6 +93,7 @@ class Ask:
     project: str | None
     session: str | None
     prompt: str
+    cwd: str | None = None
 
 
 @dataclass
@@ -224,7 +225,7 @@ def load_events(
             "AND captured_at < ? ORDER BY captured_at", (CLIPBOARD_BUNDLE, lo, hi),
         ).fetchall()
         ask_rows = conn.execute(
-            "SELECT id, captured_at, window_title, caption, text FROM captures WHERE bundle_id = ? "
+            "SELECT id, captured_at, window_title, caption, text, doc_path FROM captures WHERE bundle_id = ? "
             "AND captured_at >= ? AND captured_at < ? ORDER BY captured_at", (CLAUDE_CODE_BUNDLE, lo, hi),
         ).fetchall()
     finally:
@@ -274,12 +275,12 @@ def load_events(
         clips.append(Clip(t, text or "", src, dest))
 
     asks = []
-    for cid, at, project, session, text in ask_rows:
+    for cid, at, project, session, text, cwd in ask_rows:
         if keep is not None and not passes(cid):
             continue
         p = typed_prompt(text)
         if p:
-            asks.append(Ask(_local(at), project, session, p))
+            asks.append(Ask(_local(at), project, session, p, cwd))
 
     return Events(start_local, end_local, spans, visits, clips, asks, focus_source)
 
