@@ -94,6 +94,12 @@ class Settings(BaseSettings):
     capture_interval_s: float = 45.0     # periodic fallback tick cadence
     dedup_window_s: float = 300.0        # identical content within this window is skipped (5 min)
     idle_threshold_s: float = 120.0      # user considered "away" after this much idle
+    meeting_apps: list[str] = Field(default_factory=lambda: [
+        "Microsoft Teams", "Microsoft Teams (PWA)", "zoom.us", "Webex", "FaceTime", "Slack",
+    ])
+    meeting_title_patterns: list[str] = Field(default_factory=lambda: [
+        r"Meet - ", r"Zoom Meeting", r"(?i)(?=.*\| Microsoft Teams)(?=.*\b(call|meeting)\b)",
+    ])
     pause_when_away: bool = True         # skip capture + time-tracking when idle/locked/asleep
     event_debounce_s: float = 1.5        # debounce app/window-switch driven captures
 
@@ -222,6 +228,8 @@ EDITABLE_KEYS: tuple[str, ...] = (
     "capture_interval_s",
     "dedup_window_s",
     "idle_threshold_s",
+    "meeting_apps",
+    "meeting_title_patterns",
     "pause_when_away",
     "min_ax_text_len",
     "thumb_max_edge",

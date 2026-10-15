@@ -134,6 +134,24 @@ def cmd_scan(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_activity_repair(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    from .activity.repair import repair
+    from .config import get_settings
+
+    settings = get_settings()
+    path = Path(args.db).expanduser() if args.db else settings.db_path
+    before, after, changed = repair(path, interval_s=settings.capture_interval_s,
+                                    recredit=args.recredit, dry_run=args.dry_run)
+    print(f"Database: {path} ({'dry run' if args.dry_run else 'repaired'}, {changed} changed rows)")
+    print("Local day     Before (s)   After (s)   Change")
+    for day in sorted(before.keys() | after.keys()):
+        old, new = before.get(day, 0.0), after.get(day, 0.0)
+        print(f"{day}  {old:10.0f}  {new:10.0f}  {new - old:+8.0f}")
+    return 0
+
+
 def cmd_collect(args: argparse.Namespace) -> int:
     from .db import init_db
     from .plugins.registry import run_collectors
@@ -400,6 +418,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("scan", help="Ingest activity (knowledgeC / Safari / Chrome / Edge).")
     sp.add_argument("--full", action="store_true", help="Full rescan instead of incremental.")
     sp.set_defaults(func=cmd_scan)
+
+    sp = sub.add_parser("activity", help="Activity maintenance commands.")
+    activity_sub = sp.add_subparsers(dest="activity_command", required=True)
+    repair_sp = activity_sub.add_parser("repair", help="Repair active sample times and local days.")
+    repair_sp.add_argument("--db", default=None, help="SQLite database path.")
+    repair_sp.add_argument("--dry-run", action="store_true", help="Show changes without writing.")
+    repair_sp.add_argument("--recredit", action="store_true", help="Recompute seconds from sample gaps.")
+    repair_sp.set_defaults(func=cmd_activity_repair)
 
     sp = sub.add_parser("purge", help="Delete captures + thumbnails older than N days.")
     sp.add_argument("--days", type=int, default=None)

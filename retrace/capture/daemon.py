@@ -96,6 +96,8 @@ class CaptureDaemon:
         self._last_purge_day: str | None = None
         self._optimizing = threading.Lock()
         self._last_app: str | None = None
+        self._last_window_title: str | None = None
+        self._last_recorded_sample: float | None = None
         self._last_activity_scan: float = 0.0
         self._activity_scan_interval_s: float = 600.0  # refresh knowledgeC/browser data ~every 10 min
         self._pollers: list = []  # plugins with a poll() hook (e.g. Spotify), loaded at start
@@ -107,6 +109,7 @@ class CaptureDaemon:
         self._started = True
         self._stop.clear()
         self._threads = []
+        self._last_recorded_sample = None
         self._load_pollers()
         if self._enable_watcher:
             self._threads.append(threading.Thread(target=self._watch_loop, name="retrace-watch", daemon=True))
@@ -172,6 +175,10 @@ class CaptureDaemon:
             return None  # a capture is already in flight
         try:
             res = capture_once(reason=reason, settings=self._s)
+            if getattr(res, "app", None):
+                self._last_app = res.app
+            if getattr(res, "window", None):
+                self._last_window_title = res.window
             if res.status == "stored":
                 log.info("captured [%s] %s", reason, res.app)
             return res
@@ -216,7 +223,10 @@ class CaptureDaemon:
                     except json.JSONDecodeError:
                         continue
                     if evt.get("event") in ("app", "wake"):
-                        self._last_app = evt.get("app_name") or self._last_app
+                        new_app = evt.get("app_name") or self._last_app
+                        if new_app != self._last_app:
+                            self._last_window_title = None
+                        self._last_app = new_app
                         self._pending.set()
             finally:
                 self._kill_watch()
@@ -281,11 +291,16 @@ class CaptureDaemon:
     def _record_active(self, interval: float) -> None:
         """Record an idle-aware active sample for time analytics (M6)."""
         try:
-            from ..activity.service import record_active_sample
+            from ..activity.service import credited_seconds, record_active_sample
         except ModuleNotFoundError:
             return
         try:
-            record_active_sample(interval, app=self._last_app, settings=self._s)
+            now = time.monotonic()
+            elapsed = None if self._last_recorded_sample is None else now - self._last_recorded_sample
+            seconds = credited_seconds(elapsed, self._s.capture_interval_s)
+            if record_active_sample(interval, app=self._last_app, settings=self._s,
+                                    elapsed_s=seconds, window_title=self._last_window_title):
+                self._last_recorded_sample = now
         except Exception:
             log.debug("active sample failed", exc_info=True)
 

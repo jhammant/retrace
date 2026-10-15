@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import subprocess
+from datetime import timezone
 
 from ...config import Settings
 from ...db import session_scope
@@ -64,7 +65,7 @@ class AppleMusicPlugin(RetracePlugin):
         self._last_track_id = info["id"]
 
         now = utcnow()
-        bucket = int(now.timestamp() // 300)
+        bucket = int(now.replace(tzinfo=timezone.utc).timestamp() // 300)
         chash = hashlib.sha256(f"music:{info['id']}:{bucket}".encode()).hexdigest()
         text = f"{info['name']} — {info['artist']} · {info['album']}"
         with session_scope(settings) as s:

@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from sqlalchemy import select
@@ -72,6 +73,13 @@ def _utc_from_ts(ts: float) -> datetime:
 
 def _local_day(dt_utc: datetime) -> str:
     return dt_utc.replace(tzinfo=timezone.utc).astimezone().strftime("%Y-%m-%d")
+
+
+def credited_seconds(elapsed_s: float | None, interval_s: float) -> float:
+    """Use elapsed time unless a long gap indicates sleep or missed samples."""
+    if elapsed_s is None or elapsed_s <= 0 or elapsed_s > max(2 * interval_s, 150):
+        return float(interval_s)
+    return float(elapsed_s)
 
 
 def _ro_connect(path: Path, *, immutable: bool = True) -> sqlite3.Connection:
@@ -265,20 +273,36 @@ def scan_and_upsert(full: bool = False, settings: Settings | None = None) -> dic
 
 
 def record_active_sample(
-    interval_s: float, app: str | None = None, settings: Settings | None = None
+    interval_s: float, app: str | None = None, settings: Settings | None = None,
+    *, elapsed_s: float | None = None, window_title: str | None = None,
 ) -> bool:
     """Record an idle-aware active-time sample (source='active'). Returns True if stored."""
     s = settings or get_settings()
     pres = get_presence(s.idle_threshold_s, settings=s)
-    if pres and pres.get("ok") and pres.get("present") is False:
-        return False  # user away from keyboard
     idle = (pres or {}).get("idle_seconds")
+    away = bool(pres and pres.get("ok") and pres.get("present") is False)
+    meeting = False
+    if away:
+        if pres.get("screen_locked") or pres.get("display_asleep"):
+            return False
+        meeting = (app or "").casefold() in {name.casefold() for name in s.meeting_apps}
+        if window_title:
+            for pattern in s.meeting_title_patterns:
+                try:
+                    if re.search(pattern, window_title):
+                        meeting = True
+                        break
+                except re.error:
+                    log.warning("invalid meeting title pattern: %r", pattern)
+        if not meeting or idle is None or idle > 3 * 3600:
+            return False
     now = utcnow()
-    start = _utc_from_ts(now.timestamp() - interval_s)
+    seconds = credited_seconds(elapsed_s, interval_s)
+    start = now - timedelta(seconds=seconds)
     event = {
         "source": "active", "app": app or "unknown", "url": "", "title": None,
-        "start_at": start, "end_at": now, "seconds": float(interval_s),
-        "day": _local_day(start), "detail": {"idle_seconds": idle},
+        "start_at": start, "end_at": now, "seconds": seconds,
+        "day": _local_day(start), "detail": {"idle_seconds": idle, **({"meeting": True} if meeting else {})},
     }
     with session_scope(s) as session:
         _upsert(session, [event])
