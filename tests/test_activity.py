@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
+import time
 
 from retrace.activity import service
 from retrace.db import session_scope
@@ -81,3 +83,86 @@ def test_activity_status_counts(settings, monkeypatch):
     status = service.activity_status(settings)
     assert status["rows_by_source"].get("knowledgec") == 1
     assert "knowledgec" in status["sources_available"]
+
+
+def test_active_sample_uses_elapsed_seconds(settings, monkeypatch):
+    monkeypatch.setattr(service, "get_presence", lambda *a, **k: {"ok": True, "present": True, "idle_seconds": 0})
+    service.record_active_sample(45, app="Safari", settings=settings, elapsed_s=72)
+    with session_scope(settings) as s:
+        row = s.query(ActivityEvent).one()
+        assert row.seconds == 72
+        assert row.end_at - row.start_at == timedelta(seconds=72)
+
+
+def test_active_sample_caps_long_elapsed_gap(settings, monkeypatch):
+    monkeypatch.setattr(service, "get_presence", lambda *a, **k: {"ok": True, "present": True, "idle_seconds": 0})
+    service.record_active_sample(45, app="Safari", settings=settings, elapsed_s=151)
+    with session_scope(settings) as s:
+        row = s.query(ActivityEvent).one()
+        assert row.seconds == 45
+
+
+def test_active_sample_uses_utc_start_and_local_day_in_bst(settings, monkeypatch):
+    monkeypatch.setenv("TZ", "Europe/London")
+    time.tzset()
+    monkeypatch.setattr(service, "utcnow", lambda: datetime(2026, 10, 7, 23, 30))
+    monkeypatch.setattr(service, "get_presence", lambda *a, **k: {"ok": True, "present": True, "idle_seconds": 0})
+    try:
+        service.record_active_sample(45, app="Safari", settings=settings)
+        with session_scope(settings) as s:
+            row = s.query(ActivityEvent).one()
+            assert row.start_at == datetime(2026, 10, 7, 23, 29, 15)
+            assert row.end_at - row.start_at == timedelta(seconds=45)
+            assert row.day == "2026-10-08"
+    finally:
+        monkeypatch.delenv("TZ", raising=False)
+        time.tzset()
+
+
+def test_repair_recredits_and_rebuckets_idempotently(settings, monkeypatch, capsys):
+    from retrace.cli import main
+
+    monkeypatch.setenv("TZ", "Europe/London")
+    time.tzset()
+    try:
+        with session_scope(settings) as s:
+            for end in (datetime(2026, 10, 7, 23, 30), datetime(2026, 10, 7, 23, 31, 12)):
+                s.add(ActivityEvent(source="active", app="Safari", url="", title=None,
+                                    start_at=end - timedelta(hours=1, seconds=45), end_at=end,
+                                    seconds=45, day="2026-10-07"))
+        args = ["activity", "repair", "--db", str(settings.db_path), "--recredit"]
+        assert main(args) == 0
+        first = capsys.readouterr().out
+        assert "2026-10-08" in first
+        with session_scope(settings) as s:
+            rows = s.query(ActivityEvent).order_by(ActivityEvent.end_at).all()
+            assert [r.seconds for r in rows] == [45, 72]
+            assert [r.day for r in rows] == ["2026-10-08", "2026-10-08"]
+            assert all(r.end_at - r.start_at == timedelta(seconds=r.seconds) for r in rows)
+        assert main(args) == 0
+        with session_scope(settings) as s:
+            assert [r.seconds for r in s.query(ActivityEvent).order_by(ActivityEvent.end_at)] == [45, 72]
+    finally:
+        monkeypatch.delenv("TZ", raising=False)
+        time.tzset()
+
+
+def test_repair_dry_run_does_not_change_rows(settings, monkeypatch):
+    from retrace.cli import main
+
+    monkeypatch.setenv("TZ", "Europe/London")
+    time.tzset()
+    try:
+        with session_scope(settings) as s:
+            s.add(ActivityEvent(source="active", app="Safari", url="", title=None,
+                                start_at=datetime(2026, 10, 7, 22, 29, 15),
+                                end_at=datetime(2026, 10, 7, 23, 30), seconds=45,
+                                day="2026-10-07"))
+        assert main(["activity", "repair", "--db", str(settings.db_path), "--dry-run"]) == 0
+        with session_scope(settings) as s:
+            row = s.query(ActivityEvent).one()
+            assert row.day == "2026-10-07"
+            assert row.start_at == datetime(2026, 10, 7, 22, 29, 15)
+    finally:
+        monkeypatch.delenv("TZ", raising=False)
+        time.tzset()

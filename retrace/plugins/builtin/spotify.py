@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import subprocess
+from datetime import timezone
 
 from ...config import Settings
 from ...db import session_scope
@@ -106,7 +107,7 @@ class SpotifyPlugin(RetracePlugin):
         now = utcnow()
         # Dedup within a 5-minute bucket so a daemon restart doesn't re-log the
         # same track, while genuine re-listens later still create a new entry.
-        bucket = int(now.timestamp() // 300)
+        bucket = int(now.replace(tzinfo=timezone.utc).timestamp() // 300)
         chash = hashlib.sha256(f"spotify:{info['id']}:{bucket}".encode()).hexdigest()
         text = f"{info['name']} — {info['artist']}" + (f" · {info['album']}" if info["album"] else "")
         with session_scope(settings) as s:

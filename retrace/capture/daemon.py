@@ -96,6 +96,7 @@ class CaptureDaemon:
         self._last_purge_day: str | None = None
         self._optimizing = threading.Lock()
         self._last_app: str | None = None
+        self._last_recorded_sample: float | None = None
         self._last_activity_scan: float = 0.0
         self._activity_scan_interval_s: float = 600.0  # refresh knowledgeC/browser data ~every 10 min
         self._pollers: list = []  # plugins with a poll() hook (e.g. Spotify), loaded at start
@@ -107,6 +108,7 @@ class CaptureDaemon:
         self._started = True
         self._stop.clear()
         self._threads = []
+        self._last_recorded_sample = None
         self._load_pollers()
         if self._enable_watcher:
             self._threads.append(threading.Thread(target=self._watch_loop, name="retrace-watch", daemon=True))
@@ -281,11 +283,16 @@ class CaptureDaemon:
     def _record_active(self, interval: float) -> None:
         """Record an idle-aware active sample for time analytics (M6)."""
         try:
-            from ..activity.service import record_active_sample
+            from ..activity.service import credited_seconds, record_active_sample
         except ModuleNotFoundError:
             return
         try:
-            record_active_sample(interval, app=self._last_app, settings=self._s)
+            now = time.monotonic()
+            elapsed = None if self._last_recorded_sample is None else now - self._last_recorded_sample
+            seconds = credited_seconds(elapsed, self._s.capture_interval_s)
+            if record_active_sample(interval, app=self._last_app, settings=self._s,
+                                    elapsed_s=seconds):
+                self._last_recorded_sample = now
         except Exception:
             log.debug("active sample failed", exc_info=True)
 
